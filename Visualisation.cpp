@@ -9,7 +9,7 @@
 Visualisation::Visualisation(int width_, int height_, QWidget *parent):
     QWidget(parent),
     pivotOffset(10.0),
-    cellSize(15.0),
+    cellSize(3.0),
     fovDist(100.0), fovAngle(90.0 / 180.0 * 3.14),
     moveSpeed(10.0), rotSpeed(0.2)
 {
@@ -62,7 +62,10 @@ void Visualisation::mousePressEvent(QMouseEvent *e)
 
 void Visualisation::paintEvent(QPaintEvent *)
 {
-    QPainter p(this);
+    QImage img(width(), height(), QImage::Format_RGB32);
+    QPainter p(&img);
+
+//    p.setClipRegion(QRect(0, 0, 200, 200));
 
     QPen mapPen;
     mapPen.setColor(QColor(45, 0, 179));
@@ -139,6 +142,9 @@ void Visualisation::paintEvent(QPaintEvent *)
         p.drawEllipse(dbgPivots[i], 1, 1);
         */
 #endif
+    QPainter q(this);
+    q.drawImage(QPointF(0, 0), img);
+
 }
 
 void Visualisation::setMap(QVector<QVector<QPointF> > m)
