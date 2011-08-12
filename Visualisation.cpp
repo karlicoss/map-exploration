@@ -8,19 +8,40 @@
 
 Visualisation::Visualisation(int width_, int height_, QWidget *parent):
     QWidget(parent),
-    curPos(0, 0), curAngle(0.0),
     pivotOffset(10.0),
-    cellSize(10.0),
+    cellSize(15.0),
     fovDist(100.0), fovAngle(90.0 / 180.0 * 3.14),
     moveSpeed(10.0), rotSpeed(0.2)
 {
    setFixedSize(width_, height_);
-    setFocusPolicy(Qt::StrongFocus);
+   setFocusPolicy(Qt::StrongFocus);
    int cellsx = width() / cellSize + 2;
    int cellsy = height() / cellSize + 2;
    isDiscovered = QVector<QVector<bool> > (cellsx, QVector<bool> (cellsy, false));
-   discover();
+    
+   QTimer *timer = new QTimer(this);
+   connect(timer, SIGNAL(timeout()), this, SLOT(handleKeys()));
+   timer->start(100);
+   init();
 }
+
+void Visualisation::init()
+{
+    QPointF p00 = QPointF(0, 0), p10 = QPointF(width() - 1, 0), p01 = QPointF(0, height() - 1), p11 = QPointF(width() - 1, height() - 1);
+    QVector<QPointF> edge;
+    edge.append(p00);
+    edge.append(p01);
+    edge.append(p11);
+    edge.append(p10);
+    edge.append(p00);
+    map.append(edge);
+
+    curPos = QPointF(1, 1);
+    curAngle = 45.0 / 180 * PI();
+    isDiscovered.fill(QVector<bool> (isDiscovered[0].size(), false));
+    discover();
+}
+
 
 void Visualisation::mousePressEvent(QMouseEvent *e)
 {
@@ -67,14 +88,37 @@ void Visualisation::paintEvent(QPaintEvent *)
             p.drawLine(QLineF(map[i][j], map[i][j + 1]));
 
     p.setPen(Qt::black);
+#ifdef DEBUG
+    p.setPen(Qt::green);
+#endif
     p.setBrush(Qt::black);
-    for (int i = 0; i < isDiscovered.size(); i++)
+    QVector<QVector<bool> > drawn = isDiscovered;
+    qreal fix = 3 * qSqrt(2) / 4;
+    for (int i = 1; i < drawn.size() - 1; i++)
     {
-        for (int j = 0; j < isDiscovered[0].size(); j++)
+        for (int j = 1; j < drawn[0].size() - 1; j++)
         {
-            if (!isDiscovered[i][j])
+            if (!drawn[i - 1][j - 1] && !drawn[i - 1][j] && !drawn[i - 1][j + 1] &&
+                !drawn[i][j - 1] && !drawn[i][j] && !drawn[i][j + 1] &&
+                !drawn[i + 1][j - 1] && !drawn[i + 1][j] && !drawn[i + 1][j + 1])
             {
-                p.drawEllipse(cellSize * QPointF(i, j), cellSize, cellSize); //or cellSize / 2 ?
+                p.drawEllipse(cellSize * QPointF(i, j), cellSize * 2 * fix, cellSize * 2 * fix);
+                drawn[i - 1][j - 1] = true, drawn[i - 1][j] = true, drawn[i - 1][j + 1] = true;
+                drawn[i][j - 1] = true, drawn[i][j] = true, drawn[i][j + 1] = true;
+                drawn[i + 1][j - 1] = true, drawn[i + 1][j] = true,drawn[i + 1][j + 1] = true;
+            }
+        }
+    }
+#ifdef DEBUG
+    p.setPen(Qt::yellow);
+#endif
+    for (int i = 0; i < drawn.size(); i++)
+    {
+        for (int j = 0; j < drawn[0].size(); j++)
+        {
+            if (!drawn[i][j])
+            {
+                p.drawEllipse(cellSize * QPointF(i, j), cellSize, cellSize);
             }
         }
     }
@@ -83,15 +127,13 @@ void Visualisation::paintEvent(QPaintEvent *)
 #ifdef DEBUG
     p.setPen(Qt::red);
     p.setBrush(Qt::red);
-    for (qreal i = 0; i < width(); i += 2 * cellSize)
-        for (qreal j = 0; j < height(); j += 2 * cellSize)
+    for (qreal i = 0; i < width(); i += cellSize)
+        for (qreal j = 0; j < height(); j += cellSize)
             p.drawEllipse(QPointF(i, j), 1, 1);
    
     p.setPen(Qt::magenta);
     p.setBrush(Qt::transparent);
-    qreal pi = 4 * qAtan(1);
-    qreal rad2qtdegr = 1.0 / pi * 180 * 16;
-    p.drawPie(QRectF(curPos - QPointF(fovDist, fovDist), curPos + QPointF(fovDist, fovDist)), (-curAngle - fovAngle / 2) * rad2qtdegr, fovAngle * rad2qtdegr);
+    p.drawPie(QRectF(curPos - QPointF(fovDist, fovDist), curPos + QPointF(fovDist, fovDist)), rad2degr(-curAngle - fovAngle / 2) * 16, rad2degr(fovAngle) * 16);
     /*
     for (int i = 0; i < dbgPivots.size(); i++)
         p.drawEllipse(dbgPivots[i], 1, 1);
@@ -107,7 +149,8 @@ void Visualisation::setMap(QVector<QVector<QPointF> > m)
 
 void Visualisation::restart()
 {
-    calculatePath();
+    //calculatePath();
+    init();
     update();
 }
 
@@ -278,25 +321,28 @@ void Visualisation::calculatePath()
 
 bool fits(const QPointF &p, const QPointF &centre, qreal radius, qreal dirAngle, qreal spanAngle)
 {
-    double rad2degr = 1.0 / PI() * 180;
     dirAngle = fmod(dirAngle, PI() * 2);
-    //if (dirAngle
+
     qreal st = dirAngle - spanAngle / 2;
     qreal fn = dirAngle + spanAngle / 2;
 #ifdef DEBUG
     //qDebug() << "Start angle: " << st << " " << "Finish angle: " << fn << endl;
 #endif
-    //st = fmod(st, PI() * 2);
-    //if (st < 0)
-    //    st += 2 * PI();
-    //fn = fmod(fn, PI() * 2);
-    //if (fn < 0)
-    //    fn += 2 * PI();
-    qreal angle = qAtan2(p.y() - centre.y(), p.x() - centre.x());//, p.y() - centre.y());
-    //if (angle < 0)
-    //    angle += 2 * PI();
+    st = fmod(st, PI() * 2);
+    if (st < 0)
+        st += 2 * PI();
+    fn = fmod(fn, PI() * 2);
+    if (fn < 0)
+        fn += 2 * PI();
+    if (st > fn)
+        fn += 2 * PI();
+    qreal angle = qAtan2(p.y() - centre.y(), p.x() - centre.x());
+    if (angle < 0)
+        angle += 2 * PI();
+    if (angle < st)
+        angle += 2 * PI();
 #ifdef DEBUG
-   // qDebug() << "Start angle2: " << st * rad2degr << " " << "Finish angle2: " << fn * rad2degr << " " << " Angle: " << angle * rad2degr << endl;
+    qDebug() << rad2degr(dirAngle) << " Start angle2: " << rad2degr(st) << " " << "Finish angle2: " << rad2degr(fn) << " Angle: " << rad2degr(angle) << endl;
 #endif
     
     return (distance(p, centre) < radius && st <= angle && angle <= fn);
@@ -306,8 +352,8 @@ void Visualisation::discover()
 {
     qreal stx = curPos.x() - fovDist, fnx = curPos.x() + fovDist;
     qreal sty = curPos.y() - fovDist, fny = curPos.y() + fovDist;
-    int stxp = qMax(0.0, stx / cellSize), fnxp = qMin(width() / cellSize, fnx / cellSize);
-    int styp = qMax(0.0, sty / cellSize), fnyp = qMin(height() / cellSize, fny / cellSize);
+    int stxp = qMax(0.0, stx / cellSize), fnxp = qMin(qreal(isDiscovered.size() - 1), fnx / cellSize);
+    int styp = qMax(0.0, sty / cellSize), fnyp = qMin(qreal(isDiscovered[0].size() - 1), fny / cellSize);
 #ifdef DEBUG
     qDebug() << "Stxp " << stxp << " fnxp " << fnxp << " styp " << styp << " fnyp " << fnyp << endl;
 #endif 
@@ -315,7 +361,7 @@ void Visualisation::discover()
     {
         for (int j = styp; j <= fnyp; j++)
         {
-            if (!isDiscovered[i][j] && fits(QPointF(i * cellSize, j * cellSize), curPos, fovDist, curAngle, fovAngle))
+            if (!isDiscovered[i][j] && fits(cellSize * QPointF(i, j), curPos, fovDist, curAngle, fovAngle))
             {
                 isDiscovered[i][j] = true;
 #ifdef DEBUG
@@ -326,20 +372,54 @@ void Visualisation::discover()
     }
 }
 
-void Visualisation::keyPressEvent(QKeyEvent *e)
+void Visualisation::handleKeys()
 {
-    if (e->key() == Qt::Key_Left)
+    bool needsDiscover = false;
+    if (pressed[Qt::Key_Left])
     {
         curAngle -= rotSpeed;
+        needsDiscover = true;
     }
-    else if (e->key() == Qt::Key_Right)
+    if (pressed[Qt::Key_Right])
     {
         curAngle += rotSpeed;
+        needsDiscover = true;
     }
-    else if (e->key() == Qt::Key_Up)
+    if (pressed[Qt::Key_Up])
     {
-        curPos += moveSpeed * QPointF(qCos(curAngle), qSin(curAngle));
+        QLineF dir(curPos, curPos + moveSpeed * QPointF(qCos(curAngle), qSin(curAngle)));
+        QPointF trash;
+        bool intersects = false;
+        for (int i = 0; i < map.size() && !intersects; i++)
+        {
+            for (int j = 0; j < map[i].size() - 1 && !intersects; j++)
+            {
+                if (dir.intersect(QLineF(map[i][j], map[i][j + 1]), &trash) == QLineF::BoundedIntersection)
+                {
+                    intersects = true;
+                }
+            }
+        }
+        if (!intersects)
+        {
+            curPos += moveSpeed * QPointF(qCos(curAngle), qSin(curAngle));
+            needsDiscover = true;
+        }
     }
-    discover();
-    update();
+    if (needsDiscover)
+    {
+        discover();
+        update();
+    }
+    
+}
+
+void Visualisation::keyPressEvent(QKeyEvent *e)
+{
+    pressed[e->key()] = true;
+}
+
+void Visualisation::keyReleaseEvent(QKeyEvent *e)
+{
+    pressed[e->key()] = false;    
 }

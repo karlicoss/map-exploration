@@ -19,3 +19,13 @@ qreal PI()
 {
     return 4 * qAtan(1);
 }
+
+qreal rad2degr(qreal rad)
+{
+    return rad / PI() * 180;
+}
+
+qreal degr2rad(qreal degr)
+{
+    return degr / 180 * PI();
+}

@@ -10,4 +10,7 @@ qreal distance(const QPointF &a, const QPointF &b);
 
 qreal PI();
 
+qreal rad2degr(qreal);
+qreal degr2rad(qreal);
+
 #endif // TOOLS_H
