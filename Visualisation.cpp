@@ -10,7 +10,7 @@ Visualisation::Visualisation(int width_, int height_, QWidget *parent):
     QWidget(parent),
     curPos(0, 0), curAngle(0.0),
     pivotOffset(10.0),
-    cellSize(5.0),
+    cellSize(10.0),
     fovDist(100.0), fovAngle(90.0 / 180.0 * 3.14),
     moveSpeed(10.0), rotSpeed(0.2)
 {
