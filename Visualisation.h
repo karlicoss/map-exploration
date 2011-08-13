@@ -20,17 +20,18 @@ private:
     void keyPressEvent(QKeyEvent *);
     void keyReleaseEvent(QKeyEvent *);
 
-    void restart();// Resets the state to initial(curPos = (0, 0), curAngle = 45 degrees), all the internal variables will be reset too
+    void restart();// Resets the state to the initial(curPos = (0, 0), curAngle = 45 degrees), all the internal variables will be reset too
     void calculatePath(const QPointF &, const QPointF &);// Calculates the path and saves it in the "path" variable.
-    bool move();// Tries to move and returns true if moved
-    void discover();
+    bool makeMove();// Tries to move and returns true if could.
+    void discoverMap();// Updates the "isDiscovered" variable.
+    QVector<QVector<int> > determineConnComp();
     void updateVirtualWalls();
-    QPair<QPointF, QPointF> pivots(const QPointF &, const QPointF &, const QPointF &);
+    QPair<QPointF, QPointF> getVertexPivots(const QPointF &, const QPointF &, const QPointF &);
     QVector<QPointF> getPivots(const QVector<QPointF> &);
 
 
-    qreal pivotOffset;// A parameter for conflicts exclusion. Path should be binded not to segments' joints, but to the nearby located points.
-                      // This parameter sets there points' offset from the joint points.
+    qreal pivotOffset;// A parameter for conflicts exclusion. Path should be binded not to polygonal chains' vertices, but to the nearby located points.
+                      // This parameter sets there points' offset from the vertices.
     qreal cellSize;// The discovered zones edges are being drawn as circles, so this parameter affects smoothing.
                    // Also, it significantly affects the perfomance.
     qreal fovDist, fovAngle;// FOV is a circle sector with the radius fovDist and the central angle fovAngle(in radians)
@@ -39,7 +40,7 @@ private:
     QPointF curPos;
     qreal curAngle;
 
-    QVector<QVector<QPointF > > map;// contains just map, shoudn't be changed
+    QVector<QVector<QPointF > > map;// contains just the map, shoudn't be changed except during the visualisation(might be changed at the initialisation).
     QVector<QVector<bool> > isDiscovered;// The Visualisation field is a grid, so some points of this grid are already discovered, some not
                                          // To convert grid nodes into real coordinates, you'll just multiply it by cellSize.
     QVector<QPointF> path;// An internal variable, contains bath between startPos and targetPos
@@ -53,6 +54,7 @@ private:
 #ifdef DEBUG
     QVector<QPointF> dbgPivots;
     QVector<QPointF> dbgConnComp;
+    QVector<QVector<int> > dbgCompNumber;
 #endif
 
 };

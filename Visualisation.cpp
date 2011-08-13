@@ -22,10 +22,10 @@ Visualisation::Visualisation(int width_, int height_, QWidget *parent):
    QTimer *timer = new QTimer(this);
    connect(timer, SIGNAL(timeout()), this, SLOT(handleKeys()));
    timer->start(100);
-   init();
+   restart();
 }
 
-void Visualisation::init()
+void Visualisation::restart()
 {
     QPointF p00 = QPointF(0, 0), p10 = QPointF(width() - 1, 0), p01 = QPointF(0, height() - 1), p11 = QPointF(width() - 1, height() - 1);
     QVector<QPointF> edge;
@@ -42,9 +42,18 @@ void Visualisation::init()
     targetPos = startPos;
     isDiscovered.fill(QVector<bool> (isDiscovered[0].size(), false));
     virtualWalls.clear();
-    discover();
+    discoverMap();
 }
 
+void Visualisation::keyPressEvent(QKeyEvent *e)
+{
+    pressed[e->key()] = true;
+}
+
+void Visualisation::keyReleaseEvent(QKeyEvent *e)
+{
+    pressed[e->key()] = false;
+}
 
 void Visualisation::mousePressEvent(QMouseEvent *e)
 {
@@ -62,66 +71,75 @@ void Visualisation::mousePressEvent(QMouseEvent *e)
 
 void Visualisation::paintEvent(QPaintEvent *)
 {
+    QPainterPath posMark;
+    qreal markWidth = 20, markHeight = 10;
+    QPolygonF triangle;
+    triangle << QPointF(-markWidth / 2, markHeight / 2) << QPointF(-markWidth / 2, -markHeight / 2) << QPointF(markWidth / 2, 0);
+    triangle << triangle.front();
+    QMatrix rotM;
+    rotM.translate(curPos.x(), curPos.y());
+    rotM.rotate(rad2degr(curAngle));
+    triangle = rotM.map(triangle);
+    posMark.addPolygon(triangle);
+
+    QPen pathPen(QColor(51, 204, 255), 2);
+    QPen mapPen(QColor(45, 0, 179), 3);
+    QPen bkgPen(Qt::white);
+    QPen undiscPen(Qt::black);
+    QPen posMarkPen(Qt::green);
+
+    QBrush bkgBrush(Qt::white);
+    QBrush undiscBrush(Qt::black);
+    QBrush posMarkBrush(Qt::green);
+
     QImage img(width(), height(), QImage::Format_RGB32);
-    QPainter p(&img);
+    QPainter p(&img);// Drawing on the widget directly causes perfomance loss.
 
-    QPen pathPen;
-    pathPen.setColor(QColor(51, 204, 255));
-    pathPen.setWidth(2);
 
-    QPen mapPen;
-    mapPen.setColor(QColor(45, 0, 179));
-    mapPen.setWidth(3);
+    p.setPen(bkgPen);
+    p.setBrush(bkgBrush);
+    p.drawRect(QRectF(0, 0, width() - 1, height() - 1));
 
-    QPainterPath mapBackground;
-    mapBackground.addRect(QRectF(0, 0, width() - 1, height() - 1));
-
-    p.setPen(Qt::white);
-    p.setBrush(Qt::white);
-    p.drawPath(mapBackground);
-
-    p.setPen(Qt::green);
-    p.setBrush(Qt::green);
-    qreal curLen = 20;
-    qreal curRad = 10;
-    p.drawEllipse(curPos, curRad, curRad);
-    p.drawLine(QLineF(curPos, curPos + curLen * QPointF(qCos(curAngle), qSin(curAngle))));
+    p.setPen(posMarkPen);
+    p.setBrush(posMarkBrush);
+    p.drawPath(posMark);
 
     p.setPen(mapPen);
     for (int i = 0; i < map.size(); i++)
         for (int j = 0; j < map[i].size() - 1; j++)
             p.drawLine(QLineF(map[i][j], map[i][j + 1]));
 
-    p.setPen(Qt::black);
+    p.setPen(undiscPen);
 #ifdef DEBUG
     p.setPen(Qt::green);
 #endif
-    p.setBrush(Qt::black);
-    QVector<QVector<bool> > drawn = isDiscovered;
-    qreal fix = 3 * qSqrt(2) / 4;
-    for (int i = 1; i < drawn.size() - 1; i++)
+    p.setBrush(undiscBrush);
+    QVector<QVector<bool> > isDrawn = isDiscovered;// Used for optimisation purpose - we can draw 1 big circle instead of 9 little.
+                                                   // However, it doesn't affect a lot now and disabled.
+/*    qreal fix = 3 * qSqrt(2) / 4;
+    for (int i = 1; i < isDrawn.size() - 1; i++)
     {
-        for (int j = 1; j < drawn[0].size() - 1; j++)
+        for (int j = 1; j < isDrawn[0].size() - 1; j++)
         {
-            if (!drawn[i - 1][j - 1] && !drawn[i - 1][j] && !drawn[i - 1][j + 1] &&
-                !drawn[i][j - 1] && !drawn[i][j] && !drawn[i][j + 1] &&
-                !drawn[i + 1][j - 1] && !drawn[i + 1][j] && !drawn[i + 1][j + 1])
+            if (!isDrawn[i - 1][j - 1] && !isDrawn[i - 1][j] && !isDrawn[i - 1][j + 1] &&
+                !isDrawn[i][j - 1] && !isDrawn[i][j] && !isDrawn[i][j + 1] &&
+                !isDrawn[i + 1][j - 1] && !isDrawn[i + 1][j] && !isDrawn[i + 1][j + 1])
             {
                 p.drawEllipse(cellSize * QPointF(i, j), cellSize * 2 * fix, cellSize * 2 * fix);
-                drawn[i - 1][j - 1] = true, drawn[i - 1][j] = true, drawn[i - 1][j + 1] = true;
-                drawn[i][j - 1] = true, drawn[i][j] = true, drawn[i][j + 1] = true;
-                drawn[i + 1][j - 1] = true, drawn[i + 1][j] = true,drawn[i + 1][j + 1] = true;
+                isDrawn[i - 1][j - 1] = true, isDrawn[i - 1][j] = true, isDrawn[i - 1][j + 1] = true;
+                isDrawn[i][j - 1] = true, isDrawn[i][j] = true, isDrawn[i][j + 1] = true;
+                isDrawn[i + 1][j - 1] = true, isDrawn[i + 1][j] = true,isDrawn[i + 1][j + 1] = true;
             }
         }
-    }
+    }*/
 #ifdef DEBUG
     p.setPen(Qt::yellow);
 #endif
-    for (int i = 0; i < drawn.size(); i++)
+    for (int i = 0; i < isDrawn.size(); i++)
     {
-        for (int j = 0; j < drawn[0].size(); j++)
+        for (int j = 0; j < isDrawn[0].size(); j++)
         {
-            if (!drawn[i][j])
+            if (!isDrawn[i][j])
             {
                 p.drawEllipse(cellSize * QPointF(i, j), cellSize, cellSize);
             }
@@ -132,40 +150,49 @@ void Visualisation::paintEvent(QPaintEvent *)
     for (int i = 0; i < path.size() - 1; i++)
         p.drawLine(QLineF(path[i], path[i + 1]));
 #ifdef DEBUG
-    p.setPen(Qt::blue);
+    p.setPen(Qt::blue);// Drawing the grid
     p.setBrush(Qt::blue);
     for (qreal i = 0; i < width(); i += cellSize)
         for (qreal j = 0; j < height(); j += cellSize)
             p.drawEllipse(QPointF(i, j), 1, 1);
    
-    p.setPen(Qt::magenta);
+    p.setPen(Qt::magenta);// Drawing the FOV
     p.setBrush(Qt::transparent);
     p.drawPie(QRectF(curPos - QPointF(fovDist, fovDist), curPos + QPointF(fovDist, fovDist)), rad2degr(-curAngle - fovAngle / 2) * 16, rad2degr(fovAngle) * 16);
 
-    p.setPen(Qt::blue);
+    p.setPen(QPen(Qt::blue, 5)); // Drawing the virtual wals
     p.setBrush(Qt::blue);
     for (int i = 0; i < virtualWalls.size(); i++)
     {
         for (int j = 0; j < virtualWalls[i].size() - 1; j++)
         {
             p.drawLine(QLineF(virtualWalls[i][j], virtualWalls[i][j + 1]));
+            p.drawEllipse(virtualWalls[i][j], 8, 8);
         }
     }
 
-    p.setPen(Qt::red);
+    p.setPen(Qt::red); // Drawing the discovered part of the grid
     p.setBrush(Qt::red);
     for (int i = 0; i < dbgConnComp.size(); i++)
     {
         p.drawEllipse(dbgConnComp[i], 1, 1);
     }
-    p.setPen(Qt::green);
+    p.setPen(Qt::green); // Drawing the pivots
     p.setBrush(Qt::green);
     for (int i = 0; i < dbgPivots.size(); i++)
         p.drawEllipse(dbgPivots[i], 1, 1);
-        
+
+    p.setPen(Qt::cyan);
+    for (int i = 0; i < dbgCompNumber.size(); i++)
+    {
+        for (int j = 0; j < dbgCompNumber[i].size(); j++)
+        {
+            p.drawText(cellSize * QPointF(i, j), QString("%1").arg(dbgCompNumber[i][j]));
+        }
+    }
 #endif
     QPainter q(this);
-    q.drawImage(QPointF(0, 0), img);
+    q.drawImage(QPointF(0, 0), img);// And finally..Drawing the whole image on the widget.
 
 }
 
@@ -175,14 +202,7 @@ void Visualisation::setMap(QVector<QVector<QPointF> > m)
     restart();
 }
 
-void Visualisation::restart()
-{
-    //calculatePath();
-    init();
-    update();
-}
-
-QPair<QPointF, QPointF> Visualisation::pivots(const QPointF &a, const QPointF &b, const QPointF &c)
+QPair<QPointF, QPointF> Visualisation::getVertexPivots(const QPointF &a, const QPointF &b, const QPointF &c)
 {
     QLineF dir1 = QLineF(b, a).unitVector(),
            dir2 = QLineF(b, c).unitVector();
@@ -195,18 +215,25 @@ QPair<QPointF, QPointF> Visualisation::pivots(const QPointF &a, const QPointF &b
 
 QVector<QPointF> Visualisation::getPivots(const QVector<QPointF> &v)
 {
-    Q_ASSERT(v.size() >= 2);
-
     QVector<QPointF> ans;
    
-    if (v.front() == v.back()) // line is enclosed
+    if (v.front() == v.back()) // the line is enclosed
     {
-        QPair<QPointF, QPointF> pv = pivots(v[v.size() - 2], v[0], v[1]);
+        QPair<QPointF, QPointF> pv = getVertexPivots(v[v.size() - 2], v[0], v[1]);
         ans.append(pv.first);
         ans.append(pv.second);
     }
     else
     {
+        // The line is not enclosed, so we'll use two points on its extension to the first and the last vertices.
+        QLineF dir1 = QLineF(v[0], v[1]),
+               dir2 = QLineF(v[v.size() - 1], v[v.size() - 2]);
+        dir1.setLength(pivotOffset);
+        dir2.setLength(pivotOffset);
+        ans.push_back(dir1.p1() - (dir1.p2() - dir1.p1()));
+        ans.push_back(dir2.p1() - (dir2.p2() - dir2.p1()));
+
+        // And four on the perpendiculars to the first and the last segment(extended to both sides).
         QLineF norm1 = QLineF(v[0], v[1]).normalVector(),
                norm2 = QLineF(v[v.size() - 1], v[v.size() - 2]).normalVector();
         norm1.setLength(pivotOffset);
@@ -215,18 +242,11 @@ QVector<QPointF> Visualisation::getPivots(const QVector<QPointF> &v)
         ans.push_back(norm1.p1() - (norm1.p2() - norm1.p1()));
         ans.push_back(norm2.p2());
         ans.push_back(norm2.p1() - (norm2.p2() - norm2.p1()));
-
-        QLineF dir1 = QLineF(v[0], v[1]),
-               dir2 = QLineF(v[v.size() - 1], v[v.size() - 2]);
-        dir1.setLength(pivotOffset);
-        dir2.setLength(pivotOffset);
-        ans.push_back(dir1.p1() - (dir1.p2() - dir1.p1()));
-        ans.push_back(dir2.p1() - (dir2.p2() - dir2.p1()));
     }
     
     for (int i = 1; i < v.size() - 1; i++)
     {
-        QPair<QPointF, QPointF> pv = pivots(v[i - 1], v[i], v[i + 1]);
+        QPair<QPointF, QPointF> pv = getVertexPivots(v[i - 1], v[i], v[i + 1]);
         ans.append(pv.first);
         ans.append(pv.second);
     }
@@ -234,12 +254,14 @@ QVector<QPointF> Visualisation::getPivots(const QVector<QPointF> &v)
     return ans;
 }
 
-void bfs(QVector<QVector<int> > *v, int stx, int sty)
+void bfs(QVector<QVector<int> > *v, int stx, int sty, int cid) // cid = component id.
+                                                               //0 - unvisited, >=1 - components, -1 - undiscovered zone
 {
     QVector<QVector<int> > &lv = *v;
+
     QQueue<QPair<int, int> > q;
     q.enqueue(qMakePair(stx, sty));
-    lv[stx][sty] = 1;
+    lv[stx][sty] = cid;
     while (!q.isEmpty())
     {
         QPair<int, int> top = q.head(); 
@@ -252,7 +274,7 @@ void bfs(QVector<QVector<int> > *v, int stx, int sty)
                     lv[top.first + i][top.second + j] == 0)
                 {
                     q.enqueue(qMakePair(top.first + i, top.second + j));
-                    lv[top.first + i][top.second + j] = 1;
+                    lv[top.first + i][top.second + j] = cid;
                 }
             }
         }
@@ -260,24 +282,26 @@ void bfs(QVector<QVector<int> > *v, int stx, int sty)
     }
 }
 
-void Visualisation::updateVirtualWalls()
+QVector<QVector<int> > Visualisation::determineConnComp()
 {
     QVector<QVector<int> > isVisited(isDiscovered.size(), QVector<int>(isDiscovered[0].size(), 0));
-    for (int i = 0; i < isVisited.size(); i++)
+    for (int i = 0; i < isVisited.size(); i++)// First, we marks _discovered_ nodes as "walls"
     {
         for (int j = 0; j < isVisited[0].size(); j++)
         {
-            if (!isDiscovered[i][j])
-                isVisited[i][j] = -1;
+            if (isDiscovered[i][j])
+                isVisited[i][j] = 1;
         }
     }
-    for (int i = 0; i < isVisited.size(); i++)
+    int compCount = 1;
+    for (int i = 0; i < isVisited.size(); i++)// Searching for the connected components
     {
         for (int j = 0; j < isVisited[0].size(); j++)
         {
             if (isVisited[i][j] == 0)
             {
-                bfs(&isVisited, i, j);
+                bfs(&isVisited, i, j, compCount + 1);// components ids are 1-indexed
+                compCount += 1;
             }
         }
     }
@@ -288,99 +312,143 @@ void Visualisation::updateVirtualWalls()
     {
         for (int j = 0; j < isVisited[0].size(); j++)
         {
-            if (isVisited[i][j] == 1)
+            if (isVisited[i][j] >= 1)
             {
                 dbgConnComp.push_back(cellSize * QPointF(i, j));
             }
         }
     }
 #endif
+    return isVisited;
+}
 
-    QVector<QPointF> result;
-    int topx = -1, topy = -1;
-    for (int j = 0; j < isVisited[0].size() && topy == -1; j++)
+QVector<QPointF> optimizeVirtualWall(const QVector<QPointF> &w)
+{
+    QVector<QPointF> ans;
+    if (w.size() >= 2)
     {
-        for (int i = 0; i < isVisited.size() && topx == -1; i++)
+        ans.append(w[0]);
+        ans.append(w[1]);
+    }
+    else
+    {
+        return w;
+    }
+    qreal eps = 0.001;
+    for (int i = 2; i < w.size(); i++)
+    {
+        QLineF l1(ans[ans.size() - 2], ans[ans.size() - 1]);
+        QLineF l2(ans[ans.size() - 1], w[i]);
+        if (qAbs(l1.angle() - l2.angle()) < eps)
         {
-            if (isVisited[i][j] == 1)
+            ans.pop_back();
+        }
+        ans.append(w[i]);
+    }
+    return ans;
+}
+
+void Visualisation::updateVirtualWalls()
+{
+    virtualWalls.clear();
+
+    QVector<QVector<int> > connComp = determineConnComp();
+
+#ifdef DEBUG
+    dbgCompNumber = connComp;
+#endif
+
+    int curComp = 1;
+    while (true)
+    {
+        QVector<QPointF> result;
+        int topx = -1, topy = -1;// Searching for the leftmost topmost point.
+        for (int j = 0; j < connComp[0].size() && topy == -1; j++)
+        {
+            for (int i = 0; i < connComp.size() && topx == -1; i++)
             {
-                topx = i;
-                topy = j;
+                if (connComp[i][j] == curComp)
+                {
+                    topx = i;
+                    topy = j;
+                    break;
+                }
+            }
+        }
+        if (topx == -1 && topy == -1)
+            break;
+        int curx = topx, cury = topy;
+        int dx[] = {-1, -1, 0, 1, 1,  1,  0, -1};
+        int dy[] = {0 ,  1, 1, 1, 0, -1, -1, -1};
+        int curDir = 4;
+
+        int finishx, finishy;// Searching for the "previuos" point for startpoint, to determine where should we stop
+        for (int i = 7; i >= 0; i--)
+        {
+            int nx = curx + dx[i];
+            int ny = cury + dy[i];
+            if (nx >= 0 && nx < connComp.size() &&
+                ny >= 0 && ny < connComp[0].size() &&
+                connComp[nx][ny] == curComp)
+            {
+                finishx = nx;
+                finishy = ny;
                 break;
             }
         }
-    }
 
-    int curx = topx, cury = topy;
-    int dx[] = {-1, -1, 0, 1, 1,  1,  0, -1};
-    int dy[] = {0 ,  1, 1, 1, 0, -1, -1, -1};
-    int curDir = 4;
-
-    int finishx, finishy;
-    for (int i = 7; i >= 0; i--)
-    {
-        int nx = curx + dx[i];
-        int ny = cury + dy[i];
-        if (nx >= 0 && nx < isVisited.size() &&
-            ny >= 0 && ny < isVisited[0].size() &&
-            isVisited[nx][ny] == 1)
+        while (!(curx == finishx && cury == finishy))
         {
-            finishx = nx;
-            finishy = ny;
-            break;
-        }
-    }
+            connComp[curx][cury] = -curComp;// Discovered but already used
+    #ifdef DEBUG
+            //qDebug() << "Has visited " << curx << " " << cury << endl;
+    #endif
+            result.append(cellSize * QPointF(curx, cury));
 
-    while (!(curx == finishx && cury == finishy))
-    {
-        isVisited[curx][cury] = 0;
-#ifdef DEBUG
-        qDebug() << "Has visited " << curx << " " << cury << endl;
-#endif
-        result.append(cellSize * QPointF(curx, cury));
-
-        int c = (curDir + 4) % 8;
-        bool foundNew = false;
-        for (int i = c; i < 8 && !foundNew; i++)
-        {
-            int nx = curx + dx[i];
-            int ny = cury + dy[i];
-            if (nx >= 0 && nx < isVisited.size() &&
-                ny >= 0 && ny < isVisited[0].size() &&
-                isVisited[nx][ny] == 1)
+            int c = (curDir + 4) % 8;
+            bool foundNew = false;
+            for (int i = c; i < 8 && !foundNew; i++)
             {
-                curx = nx;
-                cury = ny;
-                foundNew = true;
-                curDir = i;
+                int nx = curx + dx[i];
+                int ny = cury + dy[i];
+                if (nx >= 0 && nx < connComp.size() &&
+                    ny >= 0 && ny < connComp[0].size() &&
+                    (connComp[nx][ny] == curComp))
+                {
+                    curx = nx;
+                    cury = ny;
+                    foundNew = true;
+                    curDir = i;
+                }
+            }
+            for (int i = 0; i < c && !foundNew; i++)
+            {
+                int nx = curx + dx[i];
+                int ny = cury + dy[i];
+
+                if (nx >= 0 && nx < connComp.size() &&
+                    ny >= 0 && ny < connComp[0].size() &&
+                    (connComp[nx][ny] == curComp))
+                {
+                    curx = nx;
+                    cury = ny;
+                    foundNew = true;
+                    curDir = i;
+                }
+            }
+            if (!foundNew)
+            {
+                break;
             }
         }
-        for (int i = 0; i < c && !foundNew; i++)
+
+        if (result.size() != 0)
         {
-            int nx = curx + dx[i];
-            int ny = cury + dy[i];
-
-            if (nx >= 0 && nx < isVisited.size() &&
-                ny >= 0 && ny < isVisited[0].size() &&
-                isVisited[nx][ny] == 1)
-            {
-                curx = nx;
-                cury = ny;
-                foundNew = true;
-                curDir = i;
-            }
+            result.append(result.front());
+            virtualWalls.append(optimizeVirtualWall(result));
         }
-        if (!foundNew)
-            break;
+        curComp++;
     }
-
-    if (result.size() != 0)
-    {
-        result.append(result.front());
-        virtualWalls.append(result);
-    }
-#ifdef DEBUG
-#endif
 }
 
 
@@ -532,20 +600,20 @@ bool fits(const QPointF &p, const QPointF &centre, qreal radius, qreal dirAngle,
     if (angle < st)
         angle += 2 * PI();
 #ifdef DEBUG
-    qDebug() << rad2degr(dirAngle) << " Start angle2: " << rad2degr(st) << " " << "Finish angle2: " << rad2degr(fn) << " Angle: " << rad2degr(angle) << endl;
+    //qDebug() << rad2degr(dirAngle) << " Start angle2: " << rad2degr(st) << " " << "Finish angle2: " << rad2degr(fn) << " Angle: " << rad2degr(angle) << endl;
 #endif
     
     return (distance(p, centre) < radius && st <= angle && angle <= fn);
 }
 
-void Visualisation::discover()
+void Visualisation::discoverMap()
 {
     qreal stx = curPos.x() - fovDist, fnx = curPos.x() + fovDist;
     qreal sty = curPos.y() - fovDist, fny = curPos.y() + fovDist;
     int stxp = qMax(0.0, stx / cellSize), fnxp = qMin(qreal(isDiscovered.size() - 1), fnx / cellSize);
     int styp = qMax(0.0, sty / cellSize), fnyp = qMin(qreal(isDiscovered[0].size() - 1), fny / cellSize);
 #ifdef DEBUG
-    qDebug() << "Stxp " << stxp << " fnxp " << fnxp << " styp " << styp << " fnyp " << fnyp << endl;
+    //qDebug() << "Stxp " << stxp << " fnxp " << fnxp << " styp " << styp << " fnyp " << fnyp << endl;
 #endif 
     for (int i = stxp; i <= fnxp; i++)
     {
@@ -560,7 +628,6 @@ void Visualisation::discover()
             }
         }
     }
-    virtualWalls.clear();
     updateVirtualWalls();
     calculatePath(startPos, targetPos);
     update();
@@ -581,39 +648,34 @@ void Visualisation::handleKeys()
     }
     if (pressed[Qt::Key_Up])
     {
-        QLineF dir(curPos, curPos + moveSpeed * QPointF(qCos(curAngle), qSin(curAngle)));
-        QPointF trash;
-        bool intersects = false;
-        for (int i = 0; i < map.size() && !intersects; i++)
-        {
-            for (int j = 0; j < map[i].size() - 1 && !intersects; j++)
-            {
-                if (dir.intersect(QLineF(map[i][j], map[i][j + 1]), &trash) == QLineF::BoundedIntersection)
-                {
-                    intersects = true;
-                }
-            }
-        }
-        if (!intersects)
-        {
-            curPos += moveSpeed * QPointF(qCos(curAngle), qSin(curAngle));
+        if (makeMove())
             needsDiscover = true;
-        }
     }
     if (needsDiscover)
     {
-        discover();
+        discoverMap();
         update();
     }
-    
 }
 
-void Visualisation::keyPressEvent(QKeyEvent *e)
+bool Visualisation::makeMove()
 {
-    pressed[e->key()] = true;
-}
-
-void Visualisation::keyReleaseEvent(QKeyEvent *e)
-{
-    pressed[e->key()] = false;    
+    QLineF dir(curPos, curPos + moveSpeed * QPointF(qCos(curAngle), qSin(curAngle)));
+    QPointF trash;
+    bool intersects = false;
+    for (int i = 0; i < map.size() && !intersects; i++)
+    {
+        for (int j = 0; j < map[i].size() - 1 && !intersects; j++)
+        {
+            if (dir.intersect(QLineF(map[i][j], map[i][j + 1]), &trash) == QLineF::BoundedIntersection)
+            {
+                intersects = true;
+            }
+        }
+    }
+    if (!intersects)
+    {
+        curPos += moveSpeed * QPointF(qCos(curAngle), qSin(curAngle));
+    }
+    return !intersects;
 }
