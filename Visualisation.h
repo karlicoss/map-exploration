@@ -22,7 +22,8 @@ private:
 
     void init();
     void restart();
-    void calculatePath();
+    void calculatePath(const QPointF &, const QPointF &);
+    void updateVirtualWalls();
     QPair<QPointF, QPointF> pivots(const QPointF &, const QPointF &, const QPointF &);
     QVector<QPointF> getPivots(const QVector<QPointF> &);
     void discover();
@@ -40,8 +41,11 @@ private:
     QPointF startPos, targetPos;
     
     QHash<int, bool> pressed;
+
+    QVector<QVector<QPointF> > virtualWalls;
 #ifdef DEBUG
     QVector<QPointF> dbgPivots;
+    QVector<QPointF> dbgConnComp;
 #endif
 
 };
