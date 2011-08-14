@@ -10,7 +10,7 @@ Visualisation::Visualisation(int width_, int height_, QWidget *parent):
     QWidget(parent),
     pivotOffset(10.0),
     cellSize(20.0),
-    fovDist(100.0), fovAngle(75.0 / 180.0 * 3.14),
+    fovDist(100.0), fovAngle(120.0 / 180.0 * 3.14),
     moveSpeed(10.0), rotSpeed(0.2)
 {
    setFixedSize(width_, height_);
@@ -41,6 +41,7 @@ void Visualisation::restart()
     startPos = curPos;
     targetPos = startPos;
     isDiscovered.fill(QVector<bool> (isDiscovered[0].size(), false));
+    isDiscovered[0][0] = true;
     virtualWalls.clear();
     discoverMap();
 }
@@ -150,11 +151,20 @@ void Visualisation::paintEvent(QPaintEvent *)
     for (int i = 0; i < path.size() - 1; i++)
         p.drawLine(QLineF(path[i], path[i + 1]));
 #ifdef DEBUG
-    p.setPen(Qt::blue);// Drawing the grid
-    p.setBrush(Qt::blue);
-    for (qreal i = 0; i < width(); i += cellSize)
-        for (qreal j = 0; j < height(); j += cellSize)
-            p.drawEllipse(QPointF(i, j), 1, 1);
+    p.setPen(Qt::red);// Drawing the grid
+    p.setBrush(Qt::red);
+    for (int i = 0; i < dbgCompNumber.size(); i++)
+        for (int j = 0; j < dbgCompNumber[0].size(); j++)
+        {
+            if (dbgCompNumber[i][j] == 2)//aka undiscovered
+            {
+                p.drawEllipse(cellSize * QPointF(i, j), 5, 5);
+            }
+            else
+            {
+                p.drawEllipse(cellSize * QPointF(i, j), 1, 1);
+            }
+        }
    
     p.setPen(Qt::magenta);// Drawing the FOV
     p.setBrush(Qt::transparent);
@@ -171,23 +181,17 @@ void Visualisation::paintEvent(QPaintEvent *)
         }
     }
 
-    p.setPen(Qt::red); // Drawing the discovered part of the grid
-    p.setBrush(Qt::red);
-    for (int i = 0; i < dbgConnComp.size(); i++)
-    {
-        p.drawEllipse(dbgConnComp[i], 1, 1);
-    }
     p.setPen(Qt::green); // Drawing the pivots
     p.setBrush(Qt::green);
     for (int i = 0; i < dbgPivots.size(); i++)
-        p.drawEllipse(dbgPivots[i], 1, 1);
+        p.drawEllipse(dbgPivots[i], 5, 5);
 
     p.setPen(Qt::cyan);
     for (int i = 0; i < dbgCompNumber.size(); i++)
     {
         for (int j = 0; j < dbgCompNumber[i].size(); j++)
         {
-            p.drawText(cellSize * QPointF(i, j), QString("%1").arg(dbgCompNumber[i][j]));
+            //p.drawText(cellSize * QPointF(i, j), QString("(%1,%2) %3").arg(i).arg(j).arg(dbgCompNumber[i][j]));
         }
     }
 #endif
@@ -216,8 +220,15 @@ QPair<QPointF, QPointF> Visualisation::getVertexPivots(const QPointF &a, const Q
 QVector<QPointF> Visualisation::getPivots(const QVector<QPointF> &v)
 {
     QVector<QPointF> ans;
-   
-    if (v.front() == v.back()) // the line is enclosed
+    if (v.size() == 1)
+    {
+        ans.append(v.front() - QPointF(pivotOffset, 0));
+        ans.append(v.front() - QPointF(0, pivotOffset));
+        ans.append(v.front() + QPointF(pivotOffset, 0));
+        ans.append(v.front() + QPointF(0, pivotOffset));
+        return ans;
+    }
+    if (v.front() == v.back() && v.size() > 2) // the line is enclosed
     {
         QPair<QPointF, QPointF> pv = getVertexPivots(v[v.size() - 2], v[0], v[1]);
         ans.append(pv.first);
@@ -307,17 +318,7 @@ QVector<QVector<int> > Visualisation::determineConnComp()
     }
 #ifdef DEBUG
     //qDebug() << isVisited << endl;
-    dbgConnComp.clear();
-    for (int i = 0; i < isVisited.size(); i++)
-    {
-        for (int j = 0; j < isVisited[0].size(); j++)
-        {
-            if (isVisited[i][j] >= 1)
-            {
-                dbgConnComp.push_back(cellSize * QPointF(i, j));
-            }
-        }
-    }
+    dbgCompNumber = isVisited;
 #endif
     return isVisited;
 }
@@ -362,28 +363,31 @@ void Visualisation::updateVirtualWalls()
     while (true)
     {
         QVector<QPointF> result;
-        int topx = -1, topy = -1;// Searching for the leftmost topmost point.
-        for (int j = 0; j < connComp[0].size() && topy == -1; j++)
+        int startx = -1, starty = -1;// Searching for the leftmost topmost point.
+        for (int j = 0; j < connComp[0].size() && starty == -1; j++)
         {
-            for (int i = 0; i < connComp.size() && topx == -1; i++)
+            for (int i = 0; i < connComp.size() && startx == -1; i++)
             {
                 if (connComp[i][j] == curComp)
                 {
-                    topx = i;
-                    topy = j;
+                    startx = i;
+                    starty = j;
                     break;
                 }
             }
         }
-        if (topx == -1 && topy == -1)
+        if (startx == -1 && starty == -1)
             break;
-        int curx = topx, cury = topy;
+        int curx = startx, cury = starty;
+
         int dx[] = {-1, -1, 0, 1, 1,  1,  0, -1};
         int dy[] = {0 ,  1, 1, 1, 0, -1, -1, -1};
         int curDir = 4;
 
-        int finishx, finishy;// Searching for the "previuos" point for startpoint, to determine where should we stop
-        for (int i = 7; i >= 0; i--)
+        /*
+        int finishx = startx, finishy = starty;// Searching for the "previuos" point for startpoint, to determine where should we stop
+
+        for (int i = 5; i >= 0; i--)
         {
             int nx = curx + dx[i];
             int ny = cury + dy[i];
@@ -396,18 +400,21 @@ void Visualisation::updateVirtualWalls()
                 break;
             }
         }
-
-        while (!(curx == finishx && cury == finishy))
+        */
+        bool startVisited = false;
+        while (!(startVisited && curx == startx && cury == starty))//!(curx == finishx && cury == finishy))
         {
-            connComp[curx][cury] = -curComp;// Discovered but already used
-    #ifdef DEBUG
-            //qDebug() << "Has visited " << curx << " " << cury << endl;
-    #endif
+            if (curx == startx && cury == starty)
+                startVisited = true;
+            if (result.size() > 400)
+            {
+                qDebug() << "oops";
+            }
             result.append(cellSize * QPointF(curx, cury));
 
             int c = (curDir + 4) % 8;
             bool foundNew = false;
-            for (int i = c; i < 8 && !foundNew; i++)
+            for (int i = c + 1; i < 8 && !foundNew; i++)
             {
                 int nx = curx + dx[i];
                 int ny = cury + dy[i];
@@ -421,7 +428,7 @@ void Visualisation::updateVirtualWalls()
                     curDir = i;
                 }
             }
-            for (int i = 0; i < c && !foundNew; i++)
+            for (int i = 0; i <= c && !foundNew; i++)
             {
                 int nx = curx + dx[i];
                 int ny = cury + dy[i];
@@ -441,12 +448,12 @@ void Visualisation::updateVirtualWalls()
                 break;
             }
         }
-
-        if (result.size() != 0)
+        //result.append(cellSize * QPointF(finishx, finishy));
+        if (result.size() >= 2)
         {
             result.append(result.front());
-            virtualWalls.append(optimizeVirtualWall(result));
         }
+        virtualWalls.append(optimizeVirtualWall(result));
         curComp++;
     }
 }
