@@ -21,14 +21,16 @@ private:
     void keyReleaseEvent(QKeyEvent *);
 
     void restart();// Resets the state to the initial(curPos = (0, 0), curAngle = 45 degrees), all the internal variables will be reset too
-    void calculatePath(const QPointF &, const QPointF &);// Calculates the path and saves it in the "path" variable.
-    bool makeMove();// Tries to move and returns true if could.
-    void discoverMap();// Updates the "isDiscovered" variable.
+    bool makeMove();// Tries to move and returns true if could. If couldn't, tries to rotate.
+    bool discoverMap();// Updates the "isDiscovered" variable. Returns true if discovered something
     QVector<QVector<int> > determineConnComp();
     void updateVirtualWalls();
     QPair<QPointF, QPointF> getVertexPivots(const QPointF &, const QPointF &, const QPointF &);
-    QVector<QPointF> getPivots(const QVector<QPointF> &);
+    QVector<QPointF> getPivots(const QVector<QPointF> &, bool mapP = false);
 
+    QHash<QPointF, QVector<QPointF> > getGraph(const QPointF &startPos, const QPointF &targetPos);
+    void calculatePath(const QPointF &startPos, const QPointF &targetPos);// Calculates the path and stores it in the "path" variable.
+    bool wallOnPath(const QPointF &a);// Returns true if there's a wall on the line from curPoing to a
 
     qreal pivotOffset;// A parameter for conflicts exclusion. Path should be binded not to polygonal chains' vertices, but to the nearby located points.
                       // This parameter sets there points' offset from the vertices.
@@ -41,6 +43,7 @@ private:
     qreal curAngle;
 
     QVector<QVector<QPointF > > map;// contains just the map, shoudn't be changed except during the visualisation(might be changed at the initialisation).
+    QVector<QPointF> mapPivots;// Should be initialized at the startup, for the perfomance improvement.
     QVector<QVector<bool> > isDiscovered;// The Visualisation field is a grid, so some points of this grid are already discovered, some not
                                          // To convert grid nodes into real coordinates, you'll just multiply it by cellSize.
     QVector<QPointF> path;// An internal variable, contains bath between startPos and targetPos

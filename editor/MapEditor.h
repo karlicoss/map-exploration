@@ -12,7 +12,6 @@ public slots:
     void saveToFile();
     void loadFromFile();
     void changeSnapRadius(int value);
-    void changeEditMode(int id);
     void generateRandom();
     void mapChanged();
 
@@ -28,9 +27,6 @@ private:
     EditArea *editArea;
     QPushButton *loadBtn, *saveBtn, *randomBtn;
     QSlider *snapRadiusSlider;
-
-    QButtonGroup *editMode;
-    QRadioButton *drawMode, *deleteMode;
 
     bool fileSaved;
 };

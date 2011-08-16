@@ -3,7 +3,7 @@
 
 #include "editortools.h"
 
-QVector<QVector<QPointF> > getMapFromFile(const QString &fileName)//assuming the file already exists
+QVector<QVector<QPointF> > getMapFromFile(const QString &fileName)
 {
     QFile file(fileName);
     file.open(QIODevice::ReadOnly);

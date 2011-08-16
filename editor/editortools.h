@@ -5,6 +5,6 @@
 #include <QString>
 #include <QPointF>
 
-QVector<QVector<QPointF> > getMapFromFile(const QString &fileName);
+QVector<QVector<QPointF> > getMapFromFile(const QString &fileName);// //assuming the file exists.
 
 #endif // EDITORTOOLS_H

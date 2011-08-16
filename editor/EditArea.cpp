@@ -6,23 +6,21 @@ EditArea::EditArea(QWidget *fieldrent): QWidget(fieldrent)
 
 void EditArea::mousePressEvent(QMouseEvent *e)
 {
-//    buttonPressed = true;
     if (e->button() == Qt::LeftButton)
-        mode = 1;
+        mode = drawMode;
     else if (e->button() == Qt::RightButton)
-        mode = 2;
+        mode = deleteMode;
 
     startPos = e->pos();
 }
 
 void EditArea::mouseReleaseEvent(QMouseEvent *)
 {
-//    buttonPressed = false;
-    if (mode == 1) //drew "add line" line
+    if (mode == drawMode) //drew "add line" line
     {
         snapPoints(startPos, lastPos);
     }
-    else if (mode == 2) //drew "delete" line
+    else if (mode == deleteMode) //drew "delete" line
     {
         QLineF line(startPos, lastPos);
         QVector<QVector<QPointF> > newdata;
@@ -50,7 +48,7 @@ void EditArea::mouseReleaseEvent(QMouseEvent *)
         }
         map = newdata;
     }
-    mode = 0;
+    mode = noMode;
     update();
 }
 
@@ -83,18 +81,18 @@ void EditArea::paintEvent(QPaintEvent * )
         for (int j = 0; j < map[i].size(); j++)
             p.drawEllipse(map[i][j], 1, 1);
 
-    if (mode == 0 || mode == 1)
+    if (mode == noMode || mode == drawMode)
     {
         p.setPen(Qt::red);
         p.setBrush(Qt::NoBrush);
         p.drawEllipse(lastPos, snapRadius, snapRadius);
     }
 
-    if (mode == 1 || mode == 2)
+    if (mode == drawMode || mode == deleteMode)
     {
-        if (mode == 1)
+        if (mode == drawMode)
             p.setPen(Qt::green);
-        else if (mode == 2)
+        else if (mode == deleteMode)
             p.setPen(Qt::red);
         p.drawLine(QLineF(startPos, lastPos));
     }
@@ -104,11 +102,6 @@ void EditArea::paintEvent(QPaintEvent * )
 void EditArea::setSnapRadius(int r)
 {
     snapRadius = r;
-}
-
-void EditArea::setEditMode(int m)
-{
-    mode = m;
 }
 
 void EditArea::setMap(const QVector<QVector<QPointF> > &m)
@@ -123,7 +116,7 @@ QVector<QVector<QPointF> > EditArea::getMap() const
     return map;
 }
 
-bool EditArea::canSnap(const QPointF &a, const QPointF &b)
+bool EditArea::canSnap(const QPointF &a, const QPointF &b) const
 {
     QPointF c = a - b;
     return c.x() * c.x() + c.y() * c.y() < snapRadius * snapRadius;
@@ -134,11 +127,11 @@ void EditArea::snapPoints(const QPointF &a, const QPointF &b)
     if (canSnap(a, b))
         return;
 
-    //1. проверяем, можем ли завершить полилинию
+    //1. Can we enclose an existing polyline?
     for (int i = 0; i < map.size(); i++)
     {
-        if (map[i].size() > 2 && //завершать две точки - странно.
-            map[i].front() != map[i].back() && //проверка на то, что полилиния уже завершена
+        if (map[i].size() > 2 && // Enlosing two points looks odd.
+            map[i].front() != map[i].back() && // Line must not be enclosed already
             ((canSnap(map[i].front(), a) && canSnap(map[i].back(), b)) ||
             (canSnap(map[i].front(), b) && canSnap(map[i].back(), a))))
         {
@@ -147,7 +140,7 @@ void EditArea::snapPoints(const QPointF &a, const QPointF &b)
         }
     }
 
-    //2. Проверяем, можем ли продолжить полилинию
+    //2. Can we continue an existing polyline?
     for (int i = 0; i < map.size(); i++)
     {
         if (map[i].front() != map[i].back())
@@ -175,7 +168,7 @@ void EditArea::snapPoints(const QPointF &a, const QPointF &b)
         }
 
     }
-    //3. Добавляем новый сегмент
+    //3. If not, just start a new polyline
     QVector<QPointF> v;
     v.append(a);
     v.append(b);

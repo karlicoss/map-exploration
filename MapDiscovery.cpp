@@ -22,6 +22,7 @@ MapDiscovery::MapDiscovery(QWidget *parent): QWidget(parent), mapEditor(NULL)
     controls->addStretch(1);
 
     vis = new Visualisation(800, 600);
+    vis->setMap(QVector<QVector<QPointF> > ());
 
     QGridLayout *mainLayout = new QGridLayout();
     mainLayout->addWidget(vis, 0, 0);

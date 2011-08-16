@@ -15,8 +15,8 @@ CONFIG(debug, debug|release) {
      TARGET = mapdiscovery
  }
 
-QMAKE_CXXFLAGS_DEBUG += -DDEBUG
-#QMAKE_LFLAGS_DEBUG += -pg
+QMAKE_CXXFLAGS_DEBUG += -pg -DDEBUG
+QMAKE_LFLAGS_DEBUG += -pg
 
 # Input
 HEADERS += MapDiscovery.h Visualisation.h editor/MapEditor.h \
