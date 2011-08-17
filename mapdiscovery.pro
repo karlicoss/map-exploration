@@ -10,25 +10,24 @@ DEPENDPATH += .
 INCLUDEPATH += .
 
 CONFIG(debug, debug|release) {
-     TARGET = mapdiscovery_debug
+     TARGET = mapexploration_debug
  } else {
-     TARGET = mapdiscovery
+     TARGET = mapexploration
  }
 
-QMAKE_CXXFLAGS_DEBUG += -pg -DDEBUG
-QMAKE_LFLAGS_DEBUG += -pg
+QMAKE_CXXFLAGS_DEBUG += -g -DDEBUG
 
 # Input
 HEADERS += Visualisation.h editor/MapEditor.h \
     tools.h \
     editor/EditArea.h \
     editor/editortools.h \
-    MapDiscovery.h
+    MapExploration.h
 SOURCES += main.cpp Visualisation.cpp editor/MapEditor.cpp \
     tools.cpp \
     editor/EditArea.cpp \
     editor/editortools.cpp \
-    MapDiscovery.cpp
+    MapExploration.cpp
 
 OTHER_FILES += \
     README \

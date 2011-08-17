@@ -1,11 +1,11 @@
-#ifndef MAPDISCOVERY_H
-#define MAPDISCOVERY_H
+#ifndef MAPEXPLORATION_H
+#define MAPEXPLORATION_H
 
 #include <QtGui>
 #include "Visualisation.h"
 #include "editor/MapEditor.h"
 
-class MapDiscovery: public QWidget
+class MapExploration: public QWidget
 {
     Q_OBJECT
 
@@ -16,7 +16,7 @@ public slots:
     void unBlockEditMap();
 
 public:
-    MapDiscovery(QWidget *parent = NULL);
+    MapExploration(QWidget *parent = NULL);
    
 private:
     void closeEvent(QCloseEvent *);
@@ -27,4 +27,4 @@ private:
     QString curMap;
 };
 
-#endif
+#endif //MAPEXPLORATION_H

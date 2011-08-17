@@ -1,9 +1,9 @@
 #include <QtGui>
-#include "MapDiscovery.h"
+#include "MapExploration.h"
 #include "Visualisation.h"
 #include "editor/MapEditor.h"
 
-MapDiscovery::MapDiscovery(QWidget *parent): QWidget(parent), mapEditor(NULL)
+MapExploration::MapExploration(QWidget *parent): QWidget(parent), mapEditor(NULL)
 {
     setWindowTitle("Map Discovery - Empty map");
 
@@ -33,18 +33,18 @@ MapDiscovery::MapDiscovery(QWidget *parent): QWidget(parent), mapEditor(NULL)
     setLayout(mainLayout);
 }
 
-void MapDiscovery::closeEvent(QCloseEvent *)
+void MapExploration::closeEvent(QCloseEvent *)
 {
     delete mapEditor;
 }
 
-void MapDiscovery::unBlockEditMap()
+void MapExploration::unBlockEditMap()
 {
     startMapEditor->setEnabled(true);
     mapEditor = NULL;
 }
 
-void MapDiscovery::editMap()
+void MapExploration::editMap()
 {
     if (mapEditor != NULL)
     {
@@ -75,7 +75,7 @@ QVector<QVector<QPointF> > getMapFromFile(const QString &fileName)
 
 }
 
-void MapDiscovery::loadFromFile()
+void MapExploration::loadFromFile()
 {
     QString fileName = QFileDialog::getOpenFileName(this,
                                                     "Open map",
@@ -97,7 +97,7 @@ void MapDiscovery::loadFromFile()
     vis->update();
 }
 
-void MapDiscovery::reloadMap()
+void MapExploration::reloadMap()
 {
     if (curMap.isEmpty())
         return;

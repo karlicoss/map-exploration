@@ -1,11 +1,11 @@
 #include <QtGui>
-#include "MapDiscovery.h"
+#include "MapExploration.h"
 
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
    
-    MapDiscovery *p = new MapDiscovery();
+    MapExploration *p = new MapExploration();
     p->show();
 
     return app.exec();
