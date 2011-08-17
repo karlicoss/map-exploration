@@ -13,6 +13,7 @@ public:
 
 private slots:
     void handleKeys();
+    void makeTurn();
 
 private:
     void mousePressEvent(QMouseEvent *);
@@ -22,9 +23,12 @@ private:
 
     void restart();// Resets the state to the initial(curPos = (0, 0), curAngle = 45 degrees), all the internal variables will be reset too
     bool makeMove();// Tries to move and returns true if could. If couldn't, tries to rotate.
+    bool makeMoveTo(const QPointF &a, const QPointF &b);
     bool discoverMap();// Updates the "isDiscovered" variable. Returns true if discovered something
     QVector<QVector<int> > determineConnComp();
     void updateVirtualWalls();
+    void setTarget();
+    void calculateForce();
     QPair<QPointF, QPointF> getVertexPivots(const QPointF &, const QPointF &, const QPointF &);
     QVector<QPointF> getPivots(const QVector<QPointF> &, bool mapP = false);
 
@@ -42,6 +46,9 @@ private:
     QPointF curPos;
     qreal curAngle;
 
+    bool followsPath;
+    QVector<QVector<qreal> > force;
+    QVector<QVector<bool> > fullyDiscovered;
     QVector<QVector<QPointF > > map;// contains just the map, shoudn't be changed except during the visualisation(might be changed at the initialisation).
     QVector<QPointF> mapPivots;// Should be initialized at the startup, for the perfomance improvement.
     QVector<QVector<bool> > isDiscovered;// The Visualisation field is a grid, so some points of this grid are already discovered, some not

@@ -2,6 +2,7 @@
 
 #include <queue>
 #include <cmath>
+#include <algorithm>
 
 #include "Visualisation.h"
 #include "tools.h"
@@ -10,17 +11,22 @@ Visualisation::Visualisation(int width_, int height_, QWidget *parent):
     QWidget(parent),
     pivotOffset(10.0),
     cellSize(10.0),
-    fovDist(200.0), fovAngle(70.0 / 180.0 * 3.14),
-    moveSpeed(10.0), rotSpeed(0.2)
+    fovDist(200.0), fovAngle(degr2rad(60)),
+    moveSpeed(10.0), rotSpeed(0.1),
+    followsPath(false)
 {
+   qsrand(10);
    setFixedSize(width_, height_);
    setFocusPolicy(Qt::StrongFocus);
-   int cellsx = width() / cellSize + 2;
-   int cellsy = height() / cellSize + 2;
+   int cellsx = width() / cellSize + 1;
+   int cellsy = height() / cellSize + 1;
    isDiscovered = QVector<QVector<bool> > (cellsx, QVector<bool> (cellsy, false));
-    
+   fullyDiscovered = QVector<QVector<bool> > (cellsx, QVector<bool> (cellsy, false));
+   force = QVector<QVector<qreal> > (cellsx, QVector<qreal> (cellsy, 0.0));
+
    QTimer *timerKeys = new QTimer(this);
-   connect(timerKeys, SIGNAL(timeout()), this, SLOT(handleKeys()));
+   //connect(timerKeys, SIGNAL(timeout()), this, SLOT(handleKeys()));
+   connect(timerKeys, SIGNAL(timeout()), this, SLOT(makeTurn()));
    timerKeys->start(50);
    restart();
 }
@@ -33,13 +39,21 @@ void Visualisation::restart()
         mapPivots += getPivots(map[i], true);
     }
 
-    curPos = QPointF(3, 3);
-    curAngle = 45.0 / 180 * PI();
+    followsPath = false;
+    curPos = QPointF(1, 1);
+    curAngle = degr2rad(-45.0);
     startPos = curPos;
     targetPos = startPos;
     isDiscovered.fill(QVector<bool> (isDiscovered[0].size(), false));
     isDiscovered[0][0] = true;
+    isDiscovered[1][1] = true;
+    isDiscovered[0][1] = true;
+    isDiscovered[1][0] = true;
+    isDiscovered[0][2] = true;
+    isDiscovered[2][0] = true;
+    isDiscovered[2][2] = true;
     virtualWalls.clear();
+    calculateForce();
     discoverMap();
 }
 
@@ -76,7 +90,7 @@ void Visualisation::paintEvent(QPaintEvent *)
     triangle << triangle.front();
     QMatrix rotM;
     rotM.translate(curPos.x(), curPos.y());
-    rotM.rotate(rad2degr(curAngle));
+    rotM.rotate(-rad2degr(curAngle));
     triangle = rotM.map(triangle);
     posMark.addPolygon(triangle);
 
@@ -131,24 +145,26 @@ void Visualisation::paintEvent(QPaintEvent *)
     p.drawPath(posMark);
 
 #ifdef DEBUG
-    p.setPen(Qt::red);// Drawing the grid
-    p.setBrush(Qt::red);
     for (int i = 0; i < dbgCompNumber.size(); i++)
         for (int j = 0; j < dbgCompNumber[0].size(); j++)
         {
             if (dbgCompNumber[i][j] == 2)//aka undiscovered
             {
+                p.setPen(Qt::red);// Drawing the grid
+                p.setBrush(Qt::red);
                 p.drawEllipse(cellSize * QPointF(i, j), 2, 2);
             }
             else
             {
+                p.setPen(Qt::green);// Drawing the grid
+                p.setBrush(Qt::green);
                 p.drawEllipse(cellSize * QPointF(i, j), 1, 1);
             }
         }
    
     p.setPen(Qt::magenta);// Drawing the FOV
     p.setBrush(Qt::transparent);
-    p.drawPie(QRectF(curPos - QPointF(fovDist, fovDist), curPos + QPointF(fovDist, fovDist)), rad2degr(-curAngle - fovAngle / 2) * 16, rad2degr(fovAngle) * 16);
+    p.drawPie(QRectF(curPos - QPointF(fovDist, fovDist), curPos + QPointF(fovDist, fovDist)), rad2degr(curAngle - fovAngle / 2) * 16, rad2degr(fovAngle) * 16);
 
     p.setPen(QPen(Qt::blue, 5)); // Drawing the virtual wals
     p.setBrush(Qt::blue);
@@ -169,15 +185,10 @@ void Visualisation::paintEvent(QPaintEvent *)
         p.drawText(dbgPivots[i], QString::number(i));
     }
 
-    p.setPen(Qt::cyan);
-    for (int i = 0; i < dbgCompNumber.size(); i++)
-    {
-        for (int j = 0; j < dbgCompNumber[i].size(); j++)
-        {
-            //p.drawText(cellSize * QPointF(i, j), QString("(%1,%2) %3").arg(i).arg(j).arg(dbgCompNumber[i][j]));
-        }
-    }
 #endif
+    p.drawEllipse(startPos, 6, 6);
+    p.drawEllipse(targetPos, 6, 6);
+
     QPainter q(this);
     q.drawImage(QPointF(0, 0), img);// And finally..Drawing the whole image on the widget.
 
@@ -405,7 +416,7 @@ void Visualisation::updateVirtualWalls()
                 startVisited = true;
             if (result.size() > 400)
             {
-                qDebug() << "oops";
+//                qDebug() << "oops";
             }
             result.append(cellSize * QPointF(curx, cury));
 
@@ -452,7 +463,7 @@ void Visualisation::updateVirtualWalls()
 
         QVector<QPointF> optResult = optimizeVirtualWall(result);
 #ifdef DEBUG
-        qDebug() << "Result was " << result.size() << " optimized to " << optResult.size() << endl;
+//        qDebug() << "Result was " << result.size() << " optimized to " << optResult.size() << endl;
 #endif
         virtualWalls.append(optResult);
         curComp++;
@@ -581,6 +592,7 @@ void Visualisation::calculatePath(const QPointF &startPos, const QPointF &target
             }
         }
     }
+    std::reverse(path.begin(), path.end());
 }
 
 bool fits(const QPointF &p, const QPointF &centre, qreal radius, qreal dirAngle, qreal spanAngle)
@@ -598,11 +610,16 @@ bool fits(const QPointF &p, const QPointF &centre, qreal radius, qreal dirAngle,
         fn += 2 * PI();
     if (st > fn)
         fn += 2 * PI();
-    qreal angle = qAtan2(p.y() - centre.y(), p.x() - centre.x());
+    qreal angle = degr2rad(QLineF(centre, p).angle());
+
     if (angle < 0)
         angle += 2 * PI();
     if (angle < st)
         angle += 2 * PI();
+#ifdef DEBUG
+//    qDebug() << "Start angle " << rad2degr(st) << " Finish angle " << rad2degr(fn) << " Anlge " << rad2degr(angle) << endl;
+#endif
+
     return (distance(p, centre) < radius && st <= angle && angle <= fn);
 }
 
@@ -626,7 +643,9 @@ bool Visualisation::discoverMap()
         }
     }
     updateVirtualWalls();
-    calculatePath(startPos, targetPos);
+    //calculateForce();
+    //setTarget();
+    //calculatePath(startPos, targetPos);
     update();
     return discovered;
 }
@@ -636,12 +655,12 @@ void Visualisation::handleKeys()
     bool needsDiscover = false;
     if (pressed[Qt::Key_Left])
     {
-        curAngle -= rotSpeed;
+        curAngle += rotSpeed;
         needsDiscover = true;
     }
     if (pressed[Qt::Key_Right])
     {
-        curAngle += rotSpeed;
+        curAngle -= rotSpeed;
         needsDiscover = true;
     }
     if (pressed[Qt::Key_Up])
@@ -657,7 +676,7 @@ void Visualisation::handleKeys()
 
 bool Visualisation::makeMove()
 {
-    QLineF dir(curPos, curPos + moveSpeed * QPointF(qCos(curAngle), qSin(curAngle)));
+    QLineF dir = QLineF::fromPolar(moveSpeed, rad2degr(curAngle)).translated(curPos);
     QPointF trash;
     bool intersects = false;
     for (int i = 0; i < map.size() && !intersects; i++)
@@ -671,16 +690,16 @@ bool Visualisation::makeMove()
 
                 qreal prod = dir.dx() * tmp.dx() + dir.dy() * tmp.dy();
                 int angle = dir.angleTo(tmp);
-                if ((0 <= angle && angle < 180) ^ (prod > 0))
-                    curAngle += rotSpeed;
-                else
+                if ((0 <= angle && angle <= 180) ^ (prod > 0))
                     curAngle -= rotSpeed;
+                else
+                    curAngle += rotSpeed;
             }
         }
     }
     if (!intersects)
     {
-        curPos += moveSpeed * QPointF(qCos(curAngle), qSin(curAngle));
+        curPos += QLineF::fromPolar(moveSpeed, rad2degr(curAngle)).p2();
     }
     return !intersects;
 }
@@ -698,6 +717,130 @@ bool Visualisation::wallOnPath(const QPointF &b)
                 return true;
             }
         }
+    }
+    return false;
+}
+
+void Visualisation::calculateForce()
+{
+    int prob = 77;//%
+    for (int i = 0; i < force.size(); i++)
+    {
+        for (int j = 0; j < force[0].size(); j++)
+        {
+            if (!(isDiscovered[i][j] &&
+                i > 0 && i < force.size() - 1 &&
+                j > 0 && j < force[0].size() - 1 &&
+                isDiscovered[i - 1][j] && isDiscovered[i + 1][j] &&
+                isDiscovered[i][j - 1] && isDiscovered[i][j + 1]))
+            {
+                continue;
+            }
+            force[i][j] = 0.0;
+            for (int q = qMax(i - 5, 0); q < qMin(force.size(), i + 5); q++)
+            {
+                for (int w = qMax(j - 5, 0); w < qMin(force[0].size(), j + 5); w++)
+                {
+                    if (i == q && j == w)
+                        continue;
+                    if (!isDiscovered[q][w])
+                    {
+                        if (qrand() % 100 >= prob)
+                            continue;
+                        force[i][j] += 10.0 / qSqrt((q - i) * (q - i) + (w - j) * (w - j) + 0.0);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void Visualisation::setTarget()
+{
+    startPos = curPos;
+    int mi = -1, mj = -1;
+    for (int i = 0; i < force.size(); i++)
+    {
+        for (int j = 0; j < force[0].size(); j++)
+        {
+            if (isDiscovered[i][j] && (mi == -1 || mj == -1 || force[i][j] > force[mi][mj]))
+            {
+                mi = i;
+                mj = j;
+            }
+        }
+    }
+    targetPos = cellSize * QPointF(mi, mj);
+}
+
+void Visualisation::makeTurn()
+{
+    discoverMap();
+    if (!followsPath)
+    {
+       calculateForce();
+       setTarget();
+       calculatePath(startPos, targetPos);
+       followsPath = true;
+    }
+    else
+    {
+        if (path.size() <= 1)
+        {
+            followsPath = false;
+            return;
+        }
+        QPointF a = path[0];
+        QPointF b = path[1];
+        bool came = makeMoveTo(a, b);
+        if (came)
+            path.pop_front();
+    }
+}
+
+bool isOnSegment(const QPointF &p, const QPointF &a, const QPointF &b)
+{
+    //segment = [t * a + (1 - t) * b | 0 <= t <= 1]
+    qreal t = (p.x() - b.x()) / (a.x() - b.x());
+    if (t >= 0 && t <= 1)
+    {
+        if (qAbs(t * a.y() + (1 - t) * b.y() - p.y()) < 0.001)
+            return true;
+    }
+    {
+
+        return false;
+    }
+
+}
+
+bool Visualisation::makeMoveTo(const QPointF &a, const QPointF &b)
+{
+    QLineF dir(a, b);
+    qreal angle = degr2rad(dir.angle());
+    if (curAngle == angle)
+    {
+        if (curPos == b)
+            return true;
+        QLineF delta = QLineF::fromPolar(moveSpeed, rad2degr(curAngle));
+        QPointF newPos = curPos + delta.p2();
+        //if (distance(a, newPos) + distance(newPos, b) > distance(a, b))
+        //    fitsInLine = false;
+        if (isOnSegment(newPos, a, b))
+            curPos = newPos;
+        else
+        {
+            curPos = b;
+            return true;
+        }
+    }
+    else if (curAngle + rotSpeed > angle)
+    {
+        curAngle = angle;
+    }
+    else
+    {
+        curAngle += rotSpeed;
     }
     return false;
 }

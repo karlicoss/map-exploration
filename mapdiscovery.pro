@@ -19,14 +19,16 @@ QMAKE_CXXFLAGS_DEBUG += -pg -DDEBUG
 QMAKE_LFLAGS_DEBUG += -pg
 
 # Input
-HEADERS += MapDiscovery.h Visualisation.h editor/MapEditor.h \
+HEADERS += Visualisation.h editor/MapEditor.h \
     tools.h \
     editor/EditArea.h \
-    editor/editortools.h
-SOURCES += main.cpp MapDiscovery.cpp Visualisation.cpp editor/MapEditor.cpp \
+    editor/editortools.h \
+    MapDiscovery.h
+SOURCES += main.cpp Visualisation.cpp editor/MapEditor.cpp \
     tools.cpp \
     editor/EditArea.cpp \
-    editor/editortools.cpp
+    editor/editortools.cpp \
+    MapDiscovery.cpp
 
 OTHER_FILES += \
     README \
