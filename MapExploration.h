@@ -23,13 +23,13 @@ private:
     void closeEvent(QCloseEvent *);
     void setVisualisation(Visualisation *newvis);// Handles the signals and layouting too
 
+    QString name;
     MapEditor *mapEditor;
     Visualisation *visualisation;
     QPushButton *loadMapBtn, *reloadMapBtn, *startMapEditorBtn, *pauseVisualisationBtn, *toggleManualControlBtn;
     QString curMap;
     int vwidth, vheight;// Visualisation parameters
     QGridLayout *mainLayout;
-    QString name;
 };
 
 #endif //MAPEXPLORATION_H

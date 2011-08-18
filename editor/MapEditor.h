@@ -18,7 +18,7 @@ private slots:
     void createNewMap();
     void saveToFile();
     void loadFromFile();
-    void generateRandom();// Looks lame, should be improved.
+    void generateRandom();// The generated map looks lame, should be improved.
     void mapChanged(); // To add (unsaved) to the title.
 
 private:
