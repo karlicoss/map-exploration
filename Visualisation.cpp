@@ -7,77 +7,71 @@
 #include "Visualisation.h"
 #include "tools.h"
 
-Visualisation::Visualisation(int width_, int height_, QWidget *parent):
+Visualisation::Visualisation(int width_, int height_, QVector<QVector<QPointF> > map_, QWidget *parent):
     QWidget(parent),
-    pivotOffset(10.0),
-    cellSize(10.0),
-    fovDist(200.0), fovAngle(degr2rad(60)),
+    fovDist(200.0), fovAngle(degr2rad(60.0)),
     moveSpeed(10.0), rotSpeed(0.1),
-    followsPath(false)
+    curPos(1, 1), curAngle(degr2rad(-45.0)),
+    pivotOffset(8.0), cellSize(8.0),
+    timer(new QTimer(this)),
+    control(AIControl),
+    map(map_),
+    state(NoState),
+    startPos(curPos), targetPos(startPos)
 {
    qsrand(10);
    setFixedSize(width_, height_);
    setFocusPolicy(Qt::StrongFocus);
+
+   connect(timer, SIGNAL(timeout()), this, SLOT(makeMove()));
+
    int cellsx = width() / cellSize + 1;
    int cellsy = height() / cellSize + 1;
    isDiscovered = QVector<QVector<bool> > (cellsx, QVector<bool> (cellsy, false));
-   fullyDiscovered = QVector<QVector<bool> > (cellsx, QVector<bool> (cellsy, false));
+   isDiscovered[0][0] = true;
+   isDiscovered[1][1] = true;
+   isDiscovered[0][1] = true;
+   isDiscovered[1][0] = true;
+
+   visitsCount = QVector<QVector<int> > (cellsx, QVector<int> (cellsy, 0));
    force = QVector<QVector<qreal> > (cellsx, QVector<qreal> (cellsy, 0.0));
 
-   QTimer *timerKeys = new QTimer(this);
-   //connect(timerKeys, SIGNAL(timeout()), this, SLOT(handleKeys()));
-   connect(timerKeys, SIGNAL(timeout()), this, SLOT(makeTurn()));
-   timerKeys->start(50);
-   restart();
-}
+   QPointF p00 = QPointF(0, 0), p10 = QPointF(width() - 1, 0), p01 = QPointF(0, height() - 1), p11 = QPointF(width() - 1, height() - 1);
+   QVector<QPointF> edge;
+   edge.append(p00);
+   edge.append(p01);
+   edge.append(p11);
+   edge.append(p10);
+   edge.append(p00);
+   map.append(edge);
 
-void Visualisation::restart()
-{
-    mapPivots.clear();
-    for (int i = 0; i < map.size(); i++)
-    {
-        mapPivots += getPivots(map[i], true);
-    }
+   for (int i = 0; i < map.size(); i++)
+       mapPivots += getPivots(map[i], true);
 
-    followsPath = false;
-    curPos = QPointF(1, 1);
-    curAngle = degr2rad(-45.0);
-    startPos = curPos;
-    targetPos = startPos;
-    isDiscovered.fill(QVector<bool> (isDiscovered[0].size(), false));
-    isDiscovered[0][0] = true;
-    isDiscovered[1][1] = true;
-    isDiscovered[0][1] = true;
-    isDiscovered[1][0] = true;
-    isDiscovered[0][2] = true;
-    isDiscovered[2][0] = true;
-    isDiscovered[2][2] = true;
-    virtualWalls.clear();
-    calculateForce();
-    discoverMap();
+   timer->start(50);// let it begin!
 }
 
 void Visualisation::keyPressEvent(QKeyEvent *e)
 {
-    pressed[e->key()] = true;
+    pressedKeys[e->key()] = true;
 }
 
 void Visualisation::keyReleaseEvent(QKeyEvent *e)
 {
-    pressed[e->key()] = false;
+    pressedKeys[e->key()] = false;
 }
 
 void Visualisation::mousePressEvent(QMouseEvent *e)
 {
     if (e->button() == Qt::LeftButton)
     {
-        startPos = e->pos();
+        //startPos = e->pos();
     }
     else if (e->button() == Qt::RightButton)
     {
-        targetPos = e->pos();
+        //targetPos = e->pos();
     }
-    calculatePath(startPos, targetPos);
+    //calculatePath(startPos, targetPos);
     update();
 }
 
@@ -150,16 +144,19 @@ void Visualisation::paintEvent(QPaintEvent *)
         {
             if (dbgCompNumber[i][j] == 2)//aka undiscovered
             {
-                p.setPen(Qt::red);// Drawing the grid
+                p.setPen(Qt::red);
                 p.setBrush(Qt::red);
                 p.drawEllipse(cellSize * QPointF(i, j), 2, 2);
             }
             else
             {
-                p.setPen(Qt::green);// Drawing the grid
+                p.setPen(Qt::green);
                 p.setBrush(Qt::green);
                 p.drawEllipse(cellSize * QPointF(i, j), 1, 1);
             }
+            p.setPen(Qt::blue);
+            if (i % 2 == 0 && j % 2 == 0 && force[i][j] > -10000)
+                p.drawText(cellSize * QPointF(i, j), QString::number(int(force[i][j])));
         }
    
     p.setPen(Qt::magenta);// Drawing the FOV
@@ -176,7 +173,7 @@ void Visualisation::paintEvent(QPaintEvent *)
             p.drawEllipse(virtualWalls[i][j], 1, 1);
         }
     }
-
+/*
     p.setPen(Qt::green); // Drawing the pivots
     p.setBrush(Qt::green);
     for (int i = 0; i < dbgPivots.size(); i++)
@@ -184,7 +181,7 @@ void Visualisation::paintEvent(QPaintEvent *)
         p.drawEllipse(dbgPivots[i], 3, 3);
         p.drawText(dbgPivots[i], QString::number(i));
     }
-
+*/
 #endif
     p.drawEllipse(startPos, 6, 6);
     p.drawEllipse(targetPos, 6, 6);
@@ -192,21 +189,6 @@ void Visualisation::paintEvent(QPaintEvent *)
     QPainter q(this);
     q.drawImage(QPointF(0, 0), img);// And finally..Drawing the whole image on the widget.
 
-}
-
-void Visualisation::setMap(QVector<QVector<QPointF> > m)
-{
-    map = m;
-    QPointF p00 = QPointF(0, 0), p10 = QPointF(width() - 1, 0), p01 = QPointF(0, height() - 1), p11 = QPointF(width() - 1, height() - 1);
-    QVector<QPointF> edge;
-    edge.append(p00);
-    edge.append(p01);
-    edge.append(p11);
-    edge.append(p10);
-    edge.append(p00);
-    map.append(edge);
-
-    restart();
 }
 
 QPair<QPointF, QPointF> Visualisation::getVertexPivots(const QPointF &a, const QPointF &b, const QPointF &c)
@@ -234,9 +216,6 @@ QVector<QPointF> Visualisation::getPivots(const QVector<QPointF> &v, bool mapP)
     QVector<QPointF> ans;
     if (v.size() == 1)
     {
-#ifdef DEBUG
-        qDebug() << "ONE ";
-#endif
         ans.append(v.front() - QPointF(pivotOffset, 0));
         ans.append(v.front() - QPointF(0, pivotOffset));
         ans.append(v.front() + QPointF(pivotOffset, 0));
@@ -495,8 +474,7 @@ dbgPivots = points;
         }
     }
 #ifdef DEBUG
-    int n = 0;
-    qDebug() << "There are " << lines.size() << " solid and " << virtualWalls.size() << " virtual walls ,and " << points.size() << "points" << endl;
+//    qDebug() << "There are " << lines.size() << " solid and " << virtualWalls.size() << " virtual walls ,and " << points.size() << "points" << endl;
 #endif
     QHash<QPointF, QVector<QPointF> > graph;//visibility graph
     QPointF trash;
@@ -653,19 +631,19 @@ bool Visualisation::discoverMap()
 void Visualisation::handleKeys()
 {
     bool needsDiscover = false;
-    if (pressed[Qt::Key_Left])
+    if (pressedKeys[Qt::Key_Left])
     {
         curAngle += rotSpeed;
         needsDiscover = true;
     }
-    if (pressed[Qt::Key_Right])
+    if (pressedKeys[Qt::Key_Right])
     {
         curAngle -= rotSpeed;
         needsDiscover = true;
     }
-    if (pressed[Qt::Key_Up])
+    if (pressedKeys[Qt::Key_Up])
     {
-        makeMove();
+        makeManualMove();
         needsDiscover = true;
     }
     if (needsDiscover)
@@ -674,7 +652,7 @@ void Visualisation::handleKeys()
     }
 }
 
-bool Visualisation::makeMove()
+bool Visualisation::makeManualMove()
 {
     QLineF dir = QLineF::fromPolar(moveSpeed, rad2degr(curAngle)).translated(curPos);
     QPointF trash;
@@ -723,11 +701,15 @@ bool Visualisation::wallOnPath(const QPointF &b)
 
 void Visualisation::calculateForce()
 {
-    int prob = 77;//%
+    int prob = 100;//%
     for (int i = 0; i < force.size(); i++)
     {
         for (int j = 0; j < force[0].size(); j++)
         {
+            if (!isDiscovered[i][j])
+            {
+                force[i][j] = -1000000.0;
+            }
             if (!(isDiscovered[i][j] &&
                 i > 0 && i < force.size() - 1 &&
                 j > 0 && j < force[0].size() - 1 &&
@@ -751,6 +733,7 @@ void Visualisation::calculateForce()
                     }
                 }
             }
+            force[i][j] -= visitsCount[i][j];
         }
     }
 }
@@ -773,45 +756,77 @@ void Visualisation::setTarget()
     targetPos = cellSize * QPointF(mi, mj);
 }
 
-void Visualisation::makeTurn()
+void Visualisation::makeAIMove()
 {
     discoverMap();
-    if (!followsPath)
+#ifdef DEBUG
+    /*qDebug() << state << endl;
+    if (state == FollowPathState)
     {
-       calculateForce();
-       setTarget();
-       calculatePath(startPos, targetPos);
-       followsPath = true;
+        qDebug() << path << endl;
     }
-    else
+    qDebug() << " -------" << endl;*/
+#endif
+    if (state == FollowPathState)
     {
-        if (path.size() <= 1)
+        if (path.size() == 0) // We haven't found a path(or it is incorrect)
         {
-            followsPath = false;
-            return;
+            lowerPoint(targetPos);// We lower target point, as its probality to be chosen again
+            state = NoState;// Second chance
         }
-        QPointF a = path[0];
-        QPointF b = path[1];
-        bool came = makeMoveTo(a, b);
-        if (came)
-            path.pop_front();
+        else
+        {
+            if (path.size() <= 1)
+            {
+                state = PointExploreState;
+                return;
+            }
+            lowerPoint(curPos);
+            QPointF a = path[0];
+            QPointF b = path[1];
+            bool came = makeMoveTo(a, b);
+            if (came) // we have passed a, so we can remove it from the path
+                path.pop_front();
+        }
+    }
+    else if (state == NoState)
+    {
+        calculateForce();
+        setTarget();
+        calculatePath(startPos, targetPos);
+        state = FollowPathState;
+    }
+    else //state = PointExplorationState
+    {
+        int prob = 70;
+        if (qrand() % 100 > prob)
+        {
+            state = NoState;
+        }
+        else
+        {
+            curAngle += rotSpeed;
+        }
     }
 }
 
-bool isOnSegment(const QPointF &p, const QPointF &a, const QPointF &b)
+bool isOnSegment(QPointF p, QPointF a, QPointF b) //returns true if p belongs to segment [a, b]
 {
     //segment = [t * a + (1 - t) * b | 0 <= t <= 1]
+    qreal eps = 0.001;
+    if (qAbs(a.x() - b.x()) < eps)
+    {
+        qSwap(a.rx(), a.ry());
+        qSwap(b.rx(), b.ry());
+        qSwap(p.rx(), p.ry());
+    }
     qreal t = (p.x() - b.x()) / (a.x() - b.x());
     if (t >= 0 && t <= 1)
     {
-        if (qAbs(t * a.y() + (1 - t) * b.y() - p.y()) < 0.001)
+        if (qAbs(t * a.y() + (1 - t) * b.y() - p.y()) < 0.01)
             return true;
     }
-    {
-
-        return false;
-    }
-
+    return false;
 }
 
 bool Visualisation::makeMoveTo(const QPointF &a, const QPointF &b)
@@ -824,8 +839,6 @@ bool Visualisation::makeMoveTo(const QPointF &a, const QPointF &b)
             return true;
         QLineF delta = QLineF::fromPolar(moveSpeed, rad2degr(curAngle));
         QPointF newPos = curPos + delta.p2();
-        //if (distance(a, newPos) + distance(newPos, b) > distance(a, b))
-        //    fitsInLine = false;
         if (isOnSegment(newPos, a, b))
             curPos = newPos;
         else
@@ -843,5 +856,47 @@ bool Visualisation::makeMoveTo(const QPointF &a, const QPointF &b)
         curAngle += rotSpeed;
     }
     return false;
+}
+
+void Visualisation::lowerPoint(const QPointF &p, int value)
+{
+    int cx = p.x() / cellSize, cy = p.y() / cellSize;
+    for (int q = -1; q <= 1; q++)
+    {
+        if (cx + q < 0 || cx + q >= force.size())
+            continue;
+        for (int w = -1; w <= 1; w++)
+        {
+            if (cy + w < 0 || cy + w >= force[0].size())
+                continue;
+            visitsCount[cx + q][cy + w] += value;
+        }
+    }
+    visitsCount[cx][cy] += value;
+}
+
+void Visualisation::togglePause()
+{
+    if (timer->isActive())
+        timer->stop();
+    else
+        timer->start(50);
+}
+
+void Visualisation::toggleManualControl()
+{
+    state = NoState;
+    if (control == ManualContol)
+        control = AIControl;
+    else
+        control = ManualContol;
+}
+
+void Visualisation::makeMove()
+{
+    if (control == ManualContol)
+        handleKeys();
+    else
+        makeAIMove();
 }
 

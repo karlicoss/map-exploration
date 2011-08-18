@@ -5,7 +5,7 @@ int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
    
-    MapExploration *p = new MapExploration();
+    MapExploration *p = new MapExploration(700, 700);
     p->show();
 
     return app.exec();

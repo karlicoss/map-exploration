@@ -3,31 +3,40 @@
 #include "Visualisation.h"
 #include "editor/MapEditor.h"
 
-MapExploration::MapExploration(QWidget *parent): QWidget(parent), mapEditor(NULL)
+MapExploration::MapExploration(int vwidth_, int vheight_, QWidget *parent):
+    QWidget(parent),
+    name("Map exploration"),
+    mapEditor(NULL),
+    visualisation(NULL),
+    loadMapBtn(new QPushButton("Load...")),
+    reloadMapBtn(new QPushButton("Reload map")),
+    startMapEditorBtn(new QPushButton("Edit map")),
+    pauseVisualisationBtn(new QPushButton("Pause visualisation")),
+    toggleManualControlBtn(new QPushButton("Toggle manual control")),
+    vwidth(vwidth_), vheight(vheight_)
 {
-    setWindowTitle("Map Discovery - Empty map");
+    setWindowTitle(name + " - " + "Empty map");
 
-    loadMap = new QPushButton("Load...");
-    connect(loadMap, SIGNAL(clicked()), this, SLOT(loadFromFile()));
-    reloadMapBtn = new QPushButton("Reload map");
+
+    connect(loadMapBtn, SIGNAL(clicked()), this, SLOT(loadFromFile()));
     connect(reloadMapBtn, SIGNAL(clicked()), this, SLOT(reloadMap()));
-    startMapEditor = new QPushButton("Edit map");
-    connect(startMapEditor, SIGNAL(clicked()), this, SLOT(editMap()));
+    connect(startMapEditorBtn, SIGNAL(clicked()), this, SLOT(editMap()));
 
-    QVBoxLayout *controls = new QVBoxLayout();
-    controls->addWidget(reloadMapBtn);
-    controls->addStretch(1);
-    controls->addSpacing(20);
-    controls->addWidget(startMapEditor);
-    controls->addStretch(1);
+    QVBoxLayout *mapControls = new QVBoxLayout();
+    mapControls->addWidget(loadMapBtn);
+    mapControls->addWidget(reloadMapBtn);
+    mapControls->addWidget(startMapEditorBtn);
+    mapControls->addStretch(1);
 
-    vis = new Visualisation(800, 600);
-    vis->setMap(QVector<QVector<QPointF> > ());
+    QHBoxLayout *visControls = new QHBoxLayout();
+    visControls->addWidget(pauseVisualisationBtn);
+    visControls->addWidget(toggleManualControlBtn);
+    visControls->addStretch(1);
 
-    QGridLayout *mainLayout = new QGridLayout();
-    mainLayout->addWidget(vis, 0, 0);
-    mainLayout->addWidget(loadMap, 1, 0);
-    mainLayout->addLayout(controls, 0, 1);
+    mainLayout = new QGridLayout();
+    setVisualisation(new Visualisation(vwidth, vheight, QVector<QVector<QPointF> > ()));
+    mainLayout->addLayout(visControls, 1, 0);
+    mainLayout->addLayout(mapControls, 0, 1);
     mainLayout->setSizeConstraint(QLayout::SetFixedSize);
 
     setLayout(mainLayout);
@@ -40,7 +49,7 @@ void MapExploration::closeEvent(QCloseEvent *)
 
 void MapExploration::unBlockEditMap()
 {
-    startMapEditor->setEnabled(true);
+    startMapEditorBtn->setEnabled(true);
     mapEditor = NULL;
 }
 
@@ -50,12 +59,11 @@ void MapExploration::editMap()
     {
         return;
     }
-
 #ifdef DEBUG
     qDebug() << "Creating a MapEditor window..." << endl;
 #endif
-    mapEditor = new MapEditor(800, 600, curMap);
-    startMapEditor->setDisabled(true);
+    mapEditor = new MapEditor(vwidth, vheight, curMap);
+    startMapEditorBtn->setDisabled(true);
     connect(mapEditor, SIGNAL(gonnaDie()), this, SLOT(unBlockEditMap()));
     mapEditor->show();
 }
@@ -87,14 +95,13 @@ void MapExploration::loadFromFile()
     else
     {
         curMap = fileName;
-        setWindowTitle("Path search - " + fileName);
+        setWindowTitle(name + " - " + fileName);
         QVector<QVector<QPointF> > m = getMapFromFile(fileName);
 #ifdef DEBUG
         qDebug() << "File " + fileName + " has been loaded: " << endl << m << endl;
 #endif
-        vis->setMap(m);
+        setVisualisation(new Visualisation(vwidth, vheight, m));
     }
-    vis->update();
 }
 
 void MapExploration::reloadMap()
@@ -102,9 +109,21 @@ void MapExploration::reloadMap()
     if (curMap.isEmpty())
         return;
     QVector<QVector<QPointF> > m = getMapFromFile(curMap);
-    vis->setMap(m);
+    setVisualisation(new Visualisation(vwidth, vheight, m));
 #ifdef DEBUG
     qDebug() << "File " + curMap + " has been reloaded: " << endl << m << endl;
 #endif
-    vis->update();
+}
+
+void MapExploration::setVisualisation(Visualisation *newvis)
+{
+    if (visualisation != NULL)
+    {
+        mainLayout->removeWidget(visualisation);
+        delete visualisation;
+    }
+    visualisation = newvis;
+    mainLayout->addWidget(visualisation, 0, 0);
+    connect(pauseVisualisationBtn, SIGNAL(clicked()), visualisation, SLOT(togglePause()));
+    connect(toggleManualControlBtn, SIGNAL(clicked()), visualisation, SLOT(toggleManualControl()));
 }

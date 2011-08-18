@@ -8,24 +8,25 @@ class MapEditor: public QWidget
 {
     Q_OBJECT
 
-public slots:
-    void saveToFile();
-    void loadFromFile();
-    void changeSnapRadius(int value);
-    void generateRandom();
-    void mapChanged();
+public:
+    MapEditor(int mapwidth, int mapheight, const QString &, QWidget *parent = NULL);
 
 signals:
     void gonnaDie();
 
-public:
-    MapEditor(int mapwidth, int mapheight, const QString &, QWidget *parent = NULL);
+private slots:
+    void createNewMap();
+    void saveToFile();
+    void loadFromFile();
+    void generateRandom();// Looks lame, should be improved.
+    void mapChanged(); // To add (unsaved) to the title.
 
 private:
     void closeEvent(QCloseEvent *);
 
-    EditArea *editArea;
-    QPushButton *loadBtn, *saveBtn, *randomBtn;
+    QString name;
+    QPushButton *newBtn, *loadBtn, *saveBtn, *randomBtn;
+    EditArea *editArea; //NOTE: might be easier to delete the old widget and create new.
     QSlider *snapRadiusSlider;
 
     bool fileSaved;

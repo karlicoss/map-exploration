@@ -1,24 +1,43 @@
 #include "MapEditor.h"
 #include "EditArea.h"
-#include "editortools.h"
 
-MapEditor::MapEditor(int mapwidth, int mapheight, const QString &fileName, QWidget *parent): QWidget(parent)
+namespace
 {
-    setWindowTitle("Simple map editor - Empty map");
 
-    loadBtn = new QPushButton("Load...");
-    saveBtn = new QPushButton("Save...");
-    randomBtn = new QPushButton("Random");
+QVector<QVector<QPointF> > getMapFromFile(const QString &fileName)// assuming the map exist
+{
+    QFile file(fileName);
+    file.open(QIODevice::ReadOnly);
+    QDataStream in(&file);
+    QVector<QVector<QPointF> > m;
+    in >> m;
+    file.close();
+    return m;
+}
+
+}
+
+MapEditor::MapEditor(int mapwidth, int mapheight, const QString &fileName, QWidget *parent):
+    QWidget(parent),
+    name("Simple map editor"),
+    newBtn(new QPushButton("New")),
+    loadBtn(new QPushButton("Load...")),
+    saveBtn(new QPushButton("Save...")),
+    randomBtn(new QPushButton("Random")),
+    editArea(new EditArea(this)),
+    snapRadiusSlider(new QSlider(Qt::Horizontal))
+{
+    connect(newBtn, SIGNAL(clicked()), this, SLOT(createNewMap()));
     connect(loadBtn, SIGNAL(clicked()), this, SLOT(loadFromFile()));
     connect(saveBtn, SIGNAL(clicked()), this, SLOT(saveToFile()));
     connect(randomBtn, SIGNAL(clicked()), this, SLOT(generateRandom()));
     
     QHBoxLayout *btnLayout = new QHBoxLayout();
+    btnLayout->addWidget(newBtn);
     btnLayout->addWidget(loadBtn);
     btnLayout->addWidget(saveBtn);
     btnLayout->addWidget(randomBtn);
 
-    editArea = new EditArea(this);
     editArea->move(10, 10);
     editArea->setFixedSize(mapwidth, mapheight);
     editArea->setMouseTracking(true);
@@ -26,15 +45,18 @@ MapEditor::MapEditor(int mapwidth, int mapheight, const QString &fileName, QWidg
     if (!fileName.isEmpty())
     {
         editArea->setMap(getMapFromFile(fileName));
-        setWindowTitle("Simple map editor - " + fileName);
+        setWindowTitle(name + " - " + fileName);
         fileSaved = true;
+    }
+    else
+    {
+        createNewMap();
     }
     connect(editArea, SIGNAL(mapChanged()), this, SLOT(mapChanged()));
 
-    snapRadiusSlider = new QSlider(Qt::Horizontal);
     snapRadiusSlider->setMaximum(50);
     snapRadiusSlider->setSliderPosition(25);
-    connect(snapRadiusSlider, SIGNAL(sliderMoved(int)), this, SLOT(changeSnapRadius(int)));
+    connect(snapRadiusSlider, SIGNAL(sliderMoved(int)), editArea, SLOT(setSnapRadius(int)));
 
     QVBoxLayout *snapLayout = new QVBoxLayout();
     QLabel *lbl = new QLabel("Snap precision:");
@@ -58,16 +80,16 @@ void MapEditor::closeEvent(QCloseEvent *)
 
 void MapEditor::generateRandom()
 {
-    setWindowTitle("Simle map editor - random map(unsaved)");
+    setWindowTitle(name + " - " + "random map(unsaved)");
     fileSaved = false;
     QVector<QVector<QPointF> > m;
     for (int i = 0; i < 15; i++)
     {
         QVector<QPointF> l;
-        qint32 w = qMax(qrand() % 400, 10);
-        qint32 h = qMax(qrand() % 300, 10);
-        qint32 px = qrand() % (editArea->width() - w);
-        qint32 py = qrand() % (editArea->height() - h);
+        int w = qMax(qrand() % 400, 10);
+        int h = qMax(qrand() % 300, 10);
+        int px = qrand() % (editArea->width() - w);
+        int py = qrand() % (editArea->height() - h);
         for (int j = 0; j < 5; j++)
         {
             l.append(QPointF(px + qrand() % w, py + qrand() % h));
@@ -90,7 +112,7 @@ void MapEditor::loadFromFile()
         return;
     else
     {
-        setWindowTitle("Simple map editor - " + fileName);
+        setWindowTitle(name + " - " + fileName);
         QVector<QVector<QPointF> > m = getMapFromFile(fileName);
         editArea->setMap(m);
         fileSaved = true;
@@ -109,7 +131,7 @@ void MapEditor::saveToFile()
         return;
     else
     {
-        setWindowTitle("Simple map editor - " + fileName);
+        setWindowTitle(name + " - " + fileName);
         QFile file(fileName);
         file.open(QIODevice::WriteOnly);
         QDataStream out(&file);
@@ -121,15 +143,15 @@ void MapEditor::saveToFile()
 
 void MapEditor::mapChanged()
 {
-    if (fileSaved)
-    {
-        setWindowTitle(windowTitle() + "(unsaved)");
-    }
-
+    setWindowTitle(name + "(unsaved)");
     fileSaved = false;
 }
 
-void MapEditor::changeSnapRadius(int value)
+void MapEditor::createNewMap()
 {
-    editArea->setSnapRadius(value);
+    setWindowTitle(name + " - " + "Empty map");
+    fileSaved = false;
+    QVector<QVector<QPointF> > m;
+    editArea->setMap(m);
 }
+

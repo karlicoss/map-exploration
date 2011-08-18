@@ -1,6 +1,7 @@
 #include "EditArea.h"
 
-EditArea::EditArea(QWidget *fieldrent): QWidget(fieldrent)
+EditArea::EditArea(QWidget *parent):
+    QWidget(parent)
 {
 }
 

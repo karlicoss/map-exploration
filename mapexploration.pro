@@ -21,12 +21,10 @@ QMAKE_CXXFLAGS_DEBUG += -g -DDEBUG
 HEADERS += Visualisation.h editor/MapEditor.h \
     tools.h \
     editor/EditArea.h \
-    editor/editortools.h \
     MapExploration.h
 SOURCES += main.cpp Visualisation.cpp editor/MapEditor.cpp \
     tools.cpp \
     editor/EditArea.cpp \
-    editor/editortools.cpp \
     MapExploration.cpp
 
 OTHER_FILES += \
